@@ -1,0 +1,30 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build-debug",
+            "type": "cargo",
+            "command": "build",
+            "args": [
+                "--example",
+                "simple"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            }
+        },
+        {
+            "label": "build-release",
+            "type": "cargo",
+            "command": "build",
+            "args": [
+                "--example",
+                "simple",
+                "--release"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            }
+        }
+    ]
+}
