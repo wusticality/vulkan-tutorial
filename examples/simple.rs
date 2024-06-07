@@ -6,6 +6,7 @@ use winit::{
     application::ApplicationHandler,
     event::WindowEvent,
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
+    keyboard::{Key, NamedKey},
     window::{Window, WindowId}
 };
 
@@ -39,6 +40,18 @@ impl ApplicationHandler for App {
                 if let Some(window) = &mut self.window {
                     window.request_redraw();
                 }
+            },
+
+            WindowEvent::KeyboardInput {
+                device_id: _,
+                event,
+                is_synthetic: _
+            } => match event.logical_key {
+                Key::Named(key) if key == NamedKey::Escape => {
+                    event_loop.exit();
+                },
+
+                _ => {}
             },
 
             _ => {}
