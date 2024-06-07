@@ -5,18 +5,32 @@
             "label": "build-debug",
             "type": "cargo",
             "command": "build",
+            "group": {
+                "kind": "build"
+            },
             "args": [
                 "--example",
                 "simple"
             ],
             "options": {
                 "cwd": "${workspaceFolder}"
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": true
             }
         },
         {
             "label": "build-release",
             "type": "cargo",
             "command": "build",
+            "group": {
+                "kind": "build"
+            },
             "args": [
                 "--example",
                 "simple",
@@ -24,6 +38,14 @@
             ],
             "options": {
                 "cwd": "${workspaceFolder}"
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": true
             }
         }
     ]
