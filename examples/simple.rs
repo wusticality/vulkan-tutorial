@@ -86,7 +86,7 @@ fn main() -> Result<()> {
 
     // Setup the tracing subscriber globally.
     let subscriber = FmtSubscriber::builder()
-        .with_max_level(LevelFilter::from_level(Level::DEBUG))
+        .with_max_level(LevelFilter::from_level(Level::INFO))
         .finish();
 
     set_global_default(subscriber)?;
