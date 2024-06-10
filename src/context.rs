@@ -1,6 +1,9 @@
 use crate::Debugging;
-use anyhow::Result;
-use ash::{vk, Entry};
+use anyhow::{anyhow, Result};
+use ash::{
+    vk::{self},
+    Entry
+};
 use ash_window::enumerate_required_extensions;
 use std::{ffi::CStr, sync::Arc};
 use winit::{raw_window_handle::HasDisplayHandle, window::Window};
@@ -20,7 +23,13 @@ pub struct Context {
     pub instance: ash::Instance,
 
     /// The debugging data.
-    pub debugging: Option<Debugging>
+    pub debugging: Option<Debugging>,
+
+    /// The physical device.
+    pub physical_device: vk::PhysicalDevice,
+
+    /// The logical device.
+    pub device: ash::Device
 }
 
 impl Context {
@@ -90,18 +99,99 @@ impl Context {
             false => None
         };
 
+        // Pick the device.
+        let (physical_device, device) = Self::pick_device(&instance)?;
+
         Ok(Self {
             window,
             entry,
             instance,
-            debugging
+            debugging,
+            physical_device,
+            device
         })
+    }
+
+    /// Pick a physical device.
+    unsafe fn pick_device(instance: &ash::Instance) -> Result<(vk::PhysicalDevice, ash::Device)> {
+        // First, get a list of all candidates and their properties. Filter out
+        // the ones that we can't use. Score candidates, prefering descrete GPUs.
+        let mut candidates = instance
+            .enumerate_physical_devices()?
+            .into_iter()
+            .map(|physical_device| {
+                let properties = instance.get_physical_device_properties(physical_device);
+                let features = instance.get_physical_device_features(physical_device);
+                let queues = instance.get_physical_device_queue_family_properties(physical_device);
+
+                (physical_device, properties, features, queues)
+            })
+            .filter(|(_physical_device, _properties, _features, queues)| {
+                // We must have a queue with graphics support.
+                queues.iter().any(|queue| {
+                    queue
+                        .queue_flags
+                        .contains(vk::QueueFlags::GRAPHICS)
+                })
+            })
+            .map(|(physical_device, properties, features, queues)| {
+                let mut score = 0;
+
+                // Prefer discrete GPUs.
+                if properties.device_type == vk::PhysicalDeviceType::DISCRETE_GPU {
+                    score += 1000;
+                }
+
+                (score, physical_device, properties, features, queues)
+            })
+            .collect::<Vec<_>>();
+
+        // Score the candidates by score.
+        candidates.sort_by(|a, b| b.0.cmp(&a.0));
+
+        // Take the highest scoring candidate.
+        let (_score, physical_device, _properties, _features, queues) = candidates
+            .first()
+            .ok_or_else(|| anyhow!("No suitable physical device found!"))?;
+
+        // Find a graphics queue family.
+        let queue_family_index = queues
+            .iter()
+            .position(|queue| {
+                queue
+                    .queue_flags
+                    .contains(vk::QueueFlags::GRAPHICS)
+            })
+            .ok_or_else(|| anyhow!("No graphics queue found!"))?;
+
+        // Create one graphics queue.
+        let queue_create_info = vk::DeviceQueueCreateInfo::default()
+            .queue_family_index(queue_family_index as u32)
+            .queue_priorities(&[1.0]);
+
+        // Our device features.
+        let physical_device_features = vk::PhysicalDeviceFeatures::default();
+
+        // Create the device info.
+        let device_info = vk::DeviceCreateInfo::default()
+            .queue_create_infos(std::slice::from_ref(&queue_create_info))
+            .enabled_features(&physical_device_features);
+
+        // Create the device.
+        let device = instance.create_device(*physical_device, &device_info, None)?;
+
+        Ok((*physical_device, device))
     }
 }
 
 impl Drop for Context {
     fn drop(&mut self) {
         unsafe {
+            // TODO: Make every component optional and destroy it if anything goes wrong!
+
+            // Destroy the device.
+            self.device.destroy_device(None);
+
             // Destroy the debugging data.
             if let Some(debugging) = self.debugging.take() {
                 std::mem::drop(debugging);

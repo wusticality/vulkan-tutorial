@@ -1,7 +1,7 @@
 use anyhow::Result;
 use ash::vk;
 use std::ffi::{c_void, CStr};
-use tracing::{error, info, trace, warn};
+use tracing::{debug, error, trace, warn};
 
 /// Holds data for the debug messenger.
 pub struct Debugging {
@@ -88,7 +88,7 @@ impl Debugging {
         } else if message_severity.contains(vk::DebugUtilsMessageSeverityFlagsEXT::WARNING) {
             warn!(message);
         } else if message_severity.contains(vk::DebugUtilsMessageSeverityFlagsEXT::INFO) {
-            info!(message);
+            debug!(message);
         } else if message_severity.contains(vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE) {
             trace!(message);
         }
