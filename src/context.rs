@@ -174,12 +174,12 @@ impl Context {
                     .queue_flags
                     .contains(vk::QueueFlags::GRAPHICS);
 
-                // We must have a queue with present support.
-                let present_support = surface_fn
+                // We must have a queue with presentation support.
+                let presentation_support = surface_fn
                     .get_physical_device_surface_support(*physical_device, *index as u32, *surface)
                     .unwrap_or(false);
 
-                graphics_support && present_support
+                graphics_support && presentation_support
             })
             .map(|(physical_device, properties, features, index, queue)| {
                 let mut score = 0;
@@ -202,7 +202,7 @@ impl Context {
                 .first()
                 .ok_or_else(|| anyhow!("No suitable physical device found!"))?;
 
-        // Create one graphics queue.
+        // Create one queue for graphics and presentation.
         let queue_create_info = vk::DeviceQueueCreateInfo::default()
             .queue_family_index(*queue_family_index as u32)
             .queue_priorities(&[1.0]);
