@@ -10,11 +10,11 @@ use winit::window::Window;
 /// The Vulkan version we're using.
 pub const VK_VERSION: u32 = vk::make_api_version(0, 1, 3, 0);
 
-/// Wraps the Vulkan instance.
+/// Wraps a Vulkan instance.
 pub struct Instance(ash::Instance);
 
 impl Instance {
-    pub unsafe fn new(entry: &ash::Entry, window: Arc<Window>, name: &CStr) -> Result<Self> {
+    pub unsafe fn new(window: Arc<Window>, entry: &ash::Entry, name: &CStr) -> Result<Self> {
         // Create the application info.
         let app_info = vk::ApplicationInfo::default()
             .application_name(name)
