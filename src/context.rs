@@ -130,7 +130,7 @@ impl Context {
         )?;
 
         // Pick the device.
-        let (physical_device, device, queue) = Self::pick_device(&instance)?;
+        let (physical_device, device, queue) = Self::pick_device(&instance, &surface_fn, &surface)?;
 
         Ok(Self {
             window,
@@ -147,37 +147,49 @@ impl Context {
 
     /// Pick a physical device.
     unsafe fn pick_device(
-        instance: &ash::Instance
+        instance: &ash::Instance,
+        surface_fn: &ash::khr::surface::Instance,
+        surface: &vk::SurfaceKHR
     ) -> Result<(vk::PhysicalDevice, ash::Device, vk::Queue)> {
         // First, get a list of all candidates and their properties. Filter out
         // the ones that we can't use. Score candidates, prefering descrete GPUs.
         let mut candidates = instance
             .enumerate_physical_devices()?
             .into_iter()
-            .map(|physical_device| {
+            .flat_map(|physical_device| {
                 let properties = instance.get_physical_device_properties(physical_device);
                 let features = instance.get_physical_device_features(physical_device);
-                let queues = instance.get_physical_device_queue_family_properties(physical_device);
 
-                (physical_device, properties, features, queues)
+                instance
+                    .get_physical_device_queue_family_properties(physical_device)
+                    .into_iter()
+                    .enumerate()
+                    .map(move |(index, queue)| {
+                        (physical_device, properties, features, index, queue)
+                    })
             })
-            .filter(|(_physical_device, _properties, _features, queues)| {
+            .filter(|(physical_device, _properties, _features, index, queue)| {
                 // We must have a queue with graphics support.
-                queues.iter().any(|queue| {
-                    queue
-                        .queue_flags
-                        .contains(vk::QueueFlags::GRAPHICS)
-                })
+                let graphics_support = queue
+                    .queue_flags
+                    .contains(vk::QueueFlags::GRAPHICS);
+
+                // We must have a queue with present support.
+                let present_support = surface_fn
+                    .get_physical_device_surface_support(*physical_device, *index as u32, *surface)
+                    .unwrap_or(false);
+
+                graphics_support && present_support
             })
-            .map(|(physical_device, properties, features, queues)| {
+            .map(|(physical_device, properties, features, index, queue)| {
                 let mut score = 0;
 
-                // Prefer discrete GPUs.
+                // Always prefer discrete GPUs.
                 if properties.device_type == vk::PhysicalDeviceType::DISCRETE_GPU {
                     score += 1000;
                 }
 
-                (score, physical_device, properties, features, queues)
+                (score, physical_device, properties, features, index, queue)
             })
             .collect::<Vec<_>>();
 
@@ -185,26 +197,17 @@ impl Context {
         candidates.sort_by(|a, b| b.0.cmp(&a.0));
 
         // Take the highest scoring candidate.
-        let (_score, physical_device, _properties, _features, queues) = candidates
-            .first()
-            .ok_or_else(|| anyhow!("No suitable physical device found!"))?;
-
-        // Find a graphics queue family.
-        let queue_family_index = queues
-            .iter()
-            .position(|queue| {
-                queue
-                    .queue_flags
-                    .contains(vk::QueueFlags::GRAPHICS)
-            })
-            .ok_or_else(|| anyhow!("No graphics queue found!"))?;
+        let (_score, physical_device, _properties, _features, queue_family_index, _queue) =
+            candidates
+                .first()
+                .ok_or_else(|| anyhow!("No suitable physical device found!"))?;
 
         // Create one graphics queue.
         let queue_create_info = vk::DeviceQueueCreateInfo::default()
-            .queue_family_index(queue_family_index as u32)
+            .queue_family_index(*queue_family_index as u32)
             .queue_priorities(&[1.0]);
 
-        // Our device features.
+        // Create our device features.
         let physical_device_features = vk::PhysicalDeviceFeatures::default();
 
         // Create the device info.
@@ -216,7 +219,7 @@ impl Context {
         let device = instance.create_device(*physical_device, &device_info, None)?;
 
         // Get the queue.
-        let queue = device.get_device_queue(queue_family_index as u32, 0);
+        let queue = device.get_device_queue(*queue_family_index as u32, 0);
 
         Ok((*physical_device, device, queue))
     }
