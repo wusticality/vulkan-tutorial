@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{ffi::CStr, sync::Arc};
 
 use anyhow::Result;
 use tracing::{error, level_filters::LevelFilter, subscriber::set_global_default, Level};
@@ -37,8 +37,13 @@ impl ApplicationHandler for App {
 
         self.window = Some(window.clone());
 
-        // Create the vulkan context.
-        self.context = Some(unsafe { Context::new(window).unwrap() });
+        unsafe {
+            // The application name.
+            let name = CStr::from_bytes_with_nul_unchecked(b"vulkan-tutorial\0");
+
+            // Create the vulkan context.
+            self.context = Some(Context::new(window, &name).unwrap());
+        }
     }
 
     fn window_event(
