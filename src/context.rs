@@ -87,11 +87,11 @@ impl Context {
             extensions
         };
 
-        // Print the required extensions.
+        // Print the required instance extensions.
         for extension in &required_instance_extensions {
             let extension = CStr::from_ptr(*extension);
 
-            info!("Required extension: {:?}", extension);
+            info!("Instance extension: {:?}", extension);
         }
 
         // Create the instance info.
@@ -151,15 +151,28 @@ impl Context {
         surface_fn: &ash::khr::surface::Instance,
         surface: &vk::SurfaceKHR
     ) -> Result<(vk::PhysicalDevice, ash::Device, vk::Queue)> {
+        // We at least require the swapchain extension.
+        let required_extensions = vec![ash::khr::swapchain::NAME];
+
+        // Print the required device extensions.
+        for extension in &required_extensions {
+            info!("Device extension: {:?}", extension);
+        }
+
         // First, get a list of all candidates and their properties. Filter out
         // the ones that we can't use. Score candidates, prefering descrete GPUs.
         let mut candidates = instance
             .enumerate_physical_devices()?
             .into_iter()
+            .filter(|physical_device| {
+                // Potential devices must support our required extensions.
+                Self::device_has_extensions(instance, physical_device, &required_extensions)
+            })
             .flat_map(|physical_device| {
                 let properties = instance.get_physical_device_properties(physical_device);
                 let features = instance.get_physical_device_features(physical_device);
 
+                // Create tuples for each queue family and its index.
                 instance
                     .get_physical_device_queue_family_properties(physical_device)
                     .into_iter()
@@ -184,7 +197,7 @@ impl Context {
             .map(|(physical_device, properties, features, index, queue)| {
                 let mut score = 0;
 
-                // Always prefer discrete GPUs.
+                // Give discrete GPUs a higher score.
                 if properties.device_type == vk::PhysicalDeviceType::DISCRETE_GPU {
                     score += 1000;
                 }
@@ -210,8 +223,15 @@ impl Context {
         // Create our device features.
         let physical_device_features = vk::PhysicalDeviceFeatures::default();
 
+        // We have to pass this as &[*const c_char].
+        let required_extensions = required_extensions
+            .iter()
+            .map(|extension| extension.as_ptr())
+            .collect::<Vec<_>>();
+
         // Create the device info.
         let device_info = vk::DeviceCreateInfo::default()
+            .enabled_extension_names(&required_extensions)
             .queue_create_infos(std::slice::from_ref(&queue_create_info))
             .enabled_features(&physical_device_features);
 
@@ -222,6 +242,38 @@ impl Context {
         let queue = device.get_device_queue(*queue_family_index as u32, 0);
 
         Ok((*physical_device, device, queue))
+    }
+
+    // Checks if the device has the required extensions.
+    unsafe fn device_has_extensions(
+        instance: &ash::Instance,
+        physical_device: &vk::PhysicalDevice,
+        required_extension: &[&CStr]
+    ) -> bool {
+        match instance.enumerate_device_extension_properties(*physical_device) {
+            Ok(available_extensions) => {
+                let available_extensions = available_extensions
+                    .iter()
+                    .map(|available_extension| {
+                        CStr::from_ptr(
+                            available_extension
+                                .extension_name
+                                .as_ptr()
+                        )
+                    })
+                    .collect::<Vec<_>>();
+
+                required_extension
+                    .iter()
+                    .all(|required_extension| {
+                        available_extensions
+                            .iter()
+                            .any(|available_extension| available_extension == required_extension)
+                    })
+            },
+
+            _ => false
+        }
     }
 }
 
