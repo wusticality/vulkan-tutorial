@@ -21,8 +21,8 @@ pub struct Context {
     /// The instance wrapper.
     pub instance: ManuallyDrop<Instance>,
 
-    /// The debugging data.
-    pub debugging: Option<Debugging>,
+    /// The debugging wrapper.
+    pub debugging: Option<ManuallyDrop<Debugging>>,
 
     /// The surface functions.
     pub surface_fn: ash::khr::surface::Instance,
@@ -51,7 +51,7 @@ impl Context {
 
         // Capture messages for everything else.
         let debugging = match cfg!(debug_assertions) {
-            true => Some(Debugging::new(&entry, &instance)?),
+            true => Some(ManuallyDrop::new(Debugging::new(&entry, &instance)?)),
             false => None
         };
 
@@ -228,8 +228,8 @@ impl Drop for Context {
                 .destroy_surface(self.surface, None);
 
             // Destroy the debugging data.
-            if let Some(debugging) = self.debugging.take() {
-                std::mem::drop(debugging);
+            if let Some(debugging) = &mut self.debugging {
+                ManuallyDrop::drop(debugging);
             }
 
             // Destroy the instance.

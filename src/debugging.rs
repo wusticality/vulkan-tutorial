@@ -3,10 +3,10 @@ use ash::vk;
 use std::ffi::{c_void, CStr};
 use tracing::{debug, error, trace, warn};
 
-/// Holds data for the debug messenger.
+/// Wraps the data for the debug messenger.
 pub struct Debugging {
     /// The function pointers.
-    pub debug_fn: ash::ext::debug_utils::Instance,
+    pub functions: ash::ext::debug_utils::Instance,
 
     /// The debug messenger.
     pub debug_messenger: vk::DebugUtilsMessengerEXT
@@ -15,17 +15,17 @@ pub struct Debugging {
 impl Debugging {
     pub unsafe fn new(entry: &ash::Entry, instance: &ash::Instance) -> Result<Self> {
         // Load debug functions.
-        let debug_fn = ash::ext::debug_utils::Instance::new(entry, instance);
+        let functions = ash::ext::debug_utils::Instance::new(entry, instance);
 
         // Create the debug messenger info.
         let messenger_create_info = Self::messenger_create_info();
 
         // Create the debug messenger.
         let debug_messenger =
-            debug_fn.create_debug_utils_messenger(&messenger_create_info, None)?;
+            functions.create_debug_utils_messenger(&messenger_create_info, None)?;
 
         Ok(Self {
-            debug_fn,
+            functions,
             debug_messenger
         })
     }
@@ -98,7 +98,7 @@ impl Debugging {
 impl Drop for Debugging {
     fn drop(&mut self) {
         unsafe {
-            self.debug_fn
+            self.functions
                 .destroy_debug_utils_messenger(self.debug_messenger, None);
         }
     }
