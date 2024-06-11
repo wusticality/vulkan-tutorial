@@ -4,8 +4,10 @@ use ash::{
     vk::{self},
     Entry
 };
-use ash_window::enumerate_required_extensions;
+use ash_window::{create_surface, enumerate_required_extensions};
+use raw_window_handle::HasWindowHandle;
 use std::{ffi::CStr, sync::Arc};
+use tracing::info;
 use winit::{raw_window_handle::HasDisplayHandle, window::Window};
 
 /// The Vulkan version we're using.
@@ -24,6 +26,12 @@ pub struct Context {
 
     /// The debugging data.
     pub debugging: Option<Debugging>,
+
+    /// The surface functions.
+    pub surface_fn: ash::khr::surface::Instance,
+
+    /// The surface.
+    pub surface: vk::SurfaceKHR,
 
     /// The physical device.
     pub physical_device: vk::PhysicalDevice,
@@ -79,6 +87,13 @@ impl Context {
             extensions
         };
 
+        // Print the required extensions.
+        for extension in &required_instance_extensions {
+            let extension = CStr::from_ptr(*extension);
+
+            info!("Required extension: {:?}", extension);
+        }
+
         // Create the instance info.
         let mut instance_info = vk::InstanceCreateInfo::default()
             .flags(create_flags)
@@ -102,6 +117,18 @@ impl Context {
             false => None
         };
 
+        // Load the surface functions.
+        let surface_fn = ash::khr::surface::Instance::new(&entry, &instance);
+
+        // Create the surface.
+        let surface = create_surface(
+            &entry,
+            &instance,
+            window.display_handle()?.as_raw(),
+            window.window_handle()?.as_raw(),
+            None
+        )?;
+
         // Pick the device.
         let (physical_device, device, queue) = Self::pick_device(&instance)?;
 
@@ -110,6 +137,8 @@ impl Context {
             entry,
             instance,
             debugging,
+            surface_fn,
+            surface,
             physical_device,
             device,
             queue
@@ -200,6 +229,10 @@ impl Drop for Context {
 
             // Destroy the device.
             self.device.destroy_device(None);
+
+            // Destroy the surface.
+            self.surface_fn
+                .destroy_surface(self.surface, None);
 
             // Destroy the debugging data.
             if let Some(debugging) = self.debugging.take() {
