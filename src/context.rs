@@ -29,7 +29,10 @@ pub struct Context {
     pub physical_device: vk::PhysicalDevice,
 
     /// The logical device.
-    pub device: ash::Device
+    pub device: ash::Device,
+
+    /// The graphics queue.
+    pub queue: vk::Queue
 }
 
 impl Context {
@@ -100,7 +103,7 @@ impl Context {
         };
 
         // Pick the device.
-        let (physical_device, device) = Self::pick_device(&instance)?;
+        let (physical_device, device, queue) = Self::pick_device(&instance)?;
 
         Ok(Self {
             window,
@@ -108,12 +111,15 @@ impl Context {
             instance,
             debugging,
             physical_device,
-            device
+            device,
+            queue
         })
     }
 
     /// Pick a physical device.
-    unsafe fn pick_device(instance: &ash::Instance) -> Result<(vk::PhysicalDevice, ash::Device)> {
+    unsafe fn pick_device(
+        instance: &ash::Instance
+    ) -> Result<(vk::PhysicalDevice, ash::Device, vk::Queue)> {
         // First, get a list of all candidates and their properties. Filter out
         // the ones that we can't use. Score candidates, prefering descrete GPUs.
         let mut candidates = instance
@@ -180,7 +186,10 @@ impl Context {
         // Create the device.
         let device = instance.create_device(*physical_device, &device_info, None)?;
 
-        Ok((*physical_device, device))
+        // Get the queue.
+        let queue = device.get_device_queue(queue_family_index as u32, 0);
+
+        Ok((*physical_device, device, queue))
     }
 }
 
