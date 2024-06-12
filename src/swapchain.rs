@@ -13,7 +13,10 @@ pub struct Swapchain {
     functions: ash::khr::swapchain::Device,
 
     /// The swapchain.
-    swapchain: vk::SwapchainKHR
+    swapchain: vk::SwapchainKHR,
+
+    // The swapchain images.
+    images: Vec<vk::Image>
 }
 
 impl Swapchain {
@@ -25,12 +28,13 @@ impl Swapchain {
         surface: &Surface
     ) -> Result<Self> {
         let functions = ash::khr::swapchain::Device::new(&instance, &device);
-        let swapchain = Self::make(window.clone(), device, surface, &functions)?;
+        let (swapchain, images) = Self::make(window.clone(), device, surface, &functions)?;
 
         Ok(Self {
             window,
             functions,
-            swapchain
+            swapchain,
+            images
         })
     }
 
@@ -40,7 +44,7 @@ impl Swapchain {
         device: &Device,
         surface: &Surface,
         functions: &ash::khr::swapchain::Device
-    ) -> Result<vk::SwapchainKHR> {
+    ) -> Result<(vk::SwapchainKHR, Vec<vk::Image>)> {
         // Get the available surface formats.
         let available_formats = surface.formats(&device.physical_device())?;
 
@@ -105,7 +109,10 @@ impl Swapchain {
         // Create the swapchain.
         let swapchain = functions.create_swapchain(&swapchain_info, None)?;
 
-        Ok(swapchain)
+        // Get the swapchain images.
+        let images = functions.get_swapchain_images(swapchain)?;
+
+        Ok((swapchain, images))
     }
 
     /// Compute the extent of the swapchain.
