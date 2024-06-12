@@ -9,10 +9,10 @@ use winit::window::Window;
 /// Wraps a Vulkan surface.
 pub struct Surface {
     /// The surface functions.
-    pub functions: ash::khr::surface::Instance,
+    functions: ash::khr::surface::Instance,
 
     /// The surface.
-    pub surface: vk::SurfaceKHR
+    surface: vk::SurfaceKHR
 }
 
 impl Surface {
@@ -30,6 +30,42 @@ impl Surface {
         )?;
 
         Ok(Self { functions, surface })
+    }
+
+    /// Gets the surface capabilities.
+    pub unsafe fn capabilities(
+        &self,
+        physical_device: &vk::PhysicalDevice
+    ) -> Result<vk::SurfaceCapabilitiesKHR> {
+        let ret = self
+            .functions
+            .get_physical_device_surface_capabilities(*physical_device, self.surface)?;
+
+        Ok(ret)
+    }
+
+    /// Gets the surface formats.
+    pub unsafe fn formats(
+        &self,
+        physical_device: &vk::PhysicalDevice
+    ) -> Result<Vec<vk::SurfaceFormatKHR>> {
+        let ret = self
+            .functions
+            .get_physical_device_surface_formats(*physical_device, self.surface)?;
+
+        Ok(ret)
+    }
+
+    /// Get the present modes.
+    pub unsafe fn present_modes(
+        &self,
+        physical_device: &vk::PhysicalDevice
+    ) -> Result<Vec<vk::PresentModeKHR>> {
+        let ret = self
+            .functions
+            .get_physical_device_surface_present_modes(*physical_device, self.surface)?;
+
+        Ok(ret)
     }
 
     /// Whether or not the surface supports presentation.
