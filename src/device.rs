@@ -7,13 +7,13 @@ use tracing::info;
 /// Wraps a Vulkan device.
 pub struct Device {
     /// The physical device.
-    pub physical_device: vk::PhysicalDevice,
+    physical_device: vk::PhysicalDevice,
 
     /// The logical device.
-    pub device: ash::Device,
+    device: ash::Device,
 
     /// The graphics queue.
-    pub queue: vk::Queue
+    queue: vk::Queue
 }
 
 impl Device {
@@ -26,20 +26,16 @@ impl Device {
             info!("Device extension: {:?}", extension);
         }
 
-        // First, get a list of all candidates and their properties. Filter out
-        // the ones that we can't use. Score candidates, prefering descrete GPUs.
+        // First, get a list of all candidates and their properties. Filter
+        // out the ones that we can't use and compute a score for each one.
         let mut candidates = instance
             .enumerate_physical_devices()?
             .into_iter()
-            .filter(|physical_device| {
-                // Potential devices must support our required extensions.
-                Self::device_has_extensions(instance, physical_device, &required_extensions)
-            })
+            // Compute a tuple for each queue family and its index.
             .flat_map(|physical_device| {
                 let properties = instance.get_physical_device_properties(physical_device);
                 let features = instance.get_physical_device_features(physical_device);
 
-                // Create tuples for each queue family and its index.
                 instance
                     .get_physical_device_queue_family_properties(physical_device)
                     .into_iter()
@@ -54,28 +50,32 @@ impl Device {
                         )
                     })
             })
+            // Filter out unsuitable candidates.
             .filter(
-                |(physical_device, _properties, _features, queue_family_index, queue)| {
-                    // We must have a queue with graphics support.
-                    let graphics_support = queue
-                        .queue_flags
-                        .contains(vk::QueueFlags::GRAPHICS);
-
-                    // We must have a queue with presentation support.
-                    let presentation_support =
-                        surface.supports_presentation(physical_device, *queue_family_index);
-
-                    graphics_support && presentation_support
+                |(physical_device, properties, features, queue_family_index, queue)| {
+                    Self::is_suitable(
+                        instance,
+                        surface,
+                        &required_extensions,
+                        physical_device,
+                        properties,
+                        features,
+                        *queue_family_index,
+                        queue
+                    )
+                    .unwrap_or(false)
                 }
             )
+            // Compute a score for each candidate.
             .map(
                 |(physical_device, properties, features, queue_family_index, queue)| {
-                    let mut score = 0;
-
-                    // Give discrete GPUs a higher score.
-                    if properties.device_type == vk::PhysicalDeviceType::DISCRETE_GPU {
-                        score += 1000;
-                    }
+                    let score = Self::score(
+                        &physical_device,
+                        &properties,
+                        &features,
+                        queue_family_index,
+                        &queue
+                    );
 
                     (
                         score,
@@ -171,6 +171,60 @@ impl Device {
 
             _ => false
         }
+    }
+
+    // Returns true if the device is suitable.
+    unsafe fn is_suitable(
+        instance: &Instance,
+        surface: &Surface,
+        required_extensions: &Vec<&CStr>,
+        physical_device: &vk::PhysicalDevice,
+        _properties: &vk::PhysicalDeviceProperties,
+        _features: &vk::PhysicalDeviceFeatures,
+        queue_family_index: u32,
+        queue: &vk::QueueFamilyProperties
+    ) -> Result<bool> {
+        // A candidate must support our required extensions.
+        if !Self::device_has_extensions(instance, physical_device, required_extensions) {
+            return Ok(false);
+        }
+
+        let formats = surface.formats(&physical_device)?;
+        let present_modes = surface.present_modes(&physical_device)?;
+
+        // We'd better have at least one surface format and present mode.
+        if formats.is_empty() || present_modes.is_empty() {
+            return Ok(false);
+        }
+
+        // We must have a queue with graphics support.
+        let graphics_support = queue
+            .queue_flags
+            .contains(vk::QueueFlags::GRAPHICS);
+
+        // We must have a queue with presentation support.
+        let presentation_support =
+            surface.supports_presentation(physical_device, queue_family_index);
+
+        Ok(graphics_support && presentation_support)
+    }
+
+    // Computes a score for the physical device.
+    unsafe fn score(
+        _physical_device: &vk::PhysicalDevice,
+        properties: &vk::PhysicalDeviceProperties,
+        _features: &vk::PhysicalDeviceFeatures,
+        _queue_family_index: u32,
+        _queue: &vk::QueueFamilyProperties
+    ) -> u32 {
+        let mut score = 0;
+
+        // Give discrete GPUs a higher score.
+        if properties.device_type == vk::PhysicalDeviceType::DISCRETE_GPU {
+            score += 1000;
+        }
+
+        score
     }
 }
 
