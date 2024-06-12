@@ -6,10 +6,10 @@ use tracing::{debug, error, trace, warn};
 /// Wraps the data for the debug messenger.
 pub struct Debugging {
     /// The function pointers.
-    pub functions: ash::ext::debug_utils::Instance,
+    functions: ash::ext::debug_utils::Instance,
 
     /// The debug messenger.
-    pub debug_messenger: vk::DebugUtilsMessengerEXT
+    debug_messenger: vk::DebugUtilsMessengerEXT
 }
 
 impl Debugging {
