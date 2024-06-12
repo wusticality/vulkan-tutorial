@@ -1,7 +1,9 @@
-use crate::{Debugging, Device, Instance, Surface, Swapchain};
-use anyhow::Result;
+use crate::{Debugging, Device, Instance, Pipeline, PipelineSettings, Surface, Swapchain};
+use anyhow::{anyhow, Result};
 use ash::Entry;
-use std::{ffi::CStr, mem::ManuallyDrop, sync::Arc};
+use std::{
+    env::current_exe, ffi::CStr, fs::canonicalize, mem::ManuallyDrop, path::PathBuf, sync::Arc
+};
 use winit::window::Window;
 
 /// The Vulkan context.
@@ -25,7 +27,10 @@ pub struct Context {
     device: Device,
 
     /// The swapchain wrapper.
-    swapchain: Swapchain
+    swapchain: Swapchain,
+
+    /// The pipeline wrapper.
+    pipeline: Pipeline
 }
 
 impl Context {
@@ -52,6 +57,17 @@ impl Context {
         // Create the swapchain wrapper.
         let swapchain = Swapchain::new(window.clone(), &instance, &device, &surface)?;
 
+        let assets_path = assets_path()?;
+
+        // Create the pipeline wrapper.
+        let pipeline = Pipeline::new(
+            &device,
+            &PipelineSettings {
+                vert_shader_path: assets_path.join("shaders/shader.vert.spv"),
+                frag_shader_path: assets_path.join("shaders/shader.frag.spv")
+            }
+        )?;
+
         Ok(Self {
             window,
             entry,
@@ -59,7 +75,8 @@ impl Context {
             debugging,
             surface,
             device,
-            swapchain
+            swapchain,
+            pipeline
         })
     }
 }
@@ -68,6 +85,9 @@ impl Drop for Context {
     fn drop(&mut self) {
         unsafe {
             // TODO: Make every component optional and destroy it if anything goes wrong!
+
+            // Destroy the pipeline.
+            self.pipeline.destroy();
 
             // Destroy the swapchain.
             self.swapchain.destroy(&self.device);
@@ -87,4 +107,16 @@ impl Drop for Context {
             self.instance.destroy();
         }
     }
+}
+
+// TODO: Don't hardcode this!
+fn assets_path() -> Result<PathBuf> {
+    let path = current_exe()?
+        .parent()
+        .map(PathBuf::from)
+        .ok_or_else(|| anyhow!("Could not get parent directory"))?;
+    let path = path.join("../../../assets");
+    let path = canonicalize(path)?;
+
+    Ok(path)
 }

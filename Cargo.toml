@@ -16,3 +16,4 @@ winit = "0.30.0"
 ash = { version = "0.38", features = ["linked"] }
 ash-window = "0.13.0"
 raw-window-handle = "0.6.2"
+bytemuck = "1.16"
