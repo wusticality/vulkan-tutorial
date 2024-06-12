@@ -16,16 +16,16 @@ pub struct Context {
     instance: ManuallyDrop<Instance>,
 
     /// The debugging wrapper.
-    debugging: Option<ManuallyDrop<Debugging>>,
+    debugging: Option<Debugging>,
 
     /// The surface wrapper.
-    surface: ManuallyDrop<Surface>,
+    surface: Surface,
 
     /// The device wrapper.
-    device: ManuallyDrop<Device>,
+    device: Device,
 
     /// The swapchain wrapper.
-    swapchain: ManuallyDrop<Swapchain>
+    swapchain: Swapchain
 }
 
 impl Context {
@@ -39,23 +39,18 @@ impl Context {
 
         // Capture messages for everything else.
         let debugging = match cfg!(debug_assertions) {
-            true => Some(ManuallyDrop::new(Debugging::new(&entry, &instance)?)),
+            true => Some(Debugging::new(&entry, &instance)?),
             false => None
         };
 
         // Create the surface wrapper.
-        let surface = ManuallyDrop::new(Surface::new(window.clone(), &entry, &instance)?);
+        let surface = Surface::new(window.clone(), &entry, &instance)?;
 
         // Create the device wrapper.
-        let device = ManuallyDrop::new(Device::new(&instance, &surface)?);
+        let device = Device::new(&instance, &surface)?;
 
         // Create the swapchain wrapper.
-        let swapchain = ManuallyDrop::new(Swapchain::new(
-            window.clone(),
-            &instance,
-            &device,
-            &surface
-        )?);
+        let swapchain = Swapchain::new(window.clone(), &instance, &device, &surface)?;
 
         Ok(Self {
             window,
@@ -75,21 +70,21 @@ impl Drop for Context {
             // TODO: Make every component optional and destroy it if anything goes wrong!
 
             // Destroy the swapchain.
-            ManuallyDrop::drop(&mut self.swapchain);
+            self.swapchain.destroy(&self.device);
 
             // Destroy the device.
-            ManuallyDrop::drop(&mut self.device);
+            self.device.destroy();
 
             // Destroy the surface.
-            ManuallyDrop::drop(&mut self.surface);
+            self.surface.destroy();
 
             // Destroy the debugging data.
             if let Some(debugging) = &mut self.debugging {
-                ManuallyDrop::drop(debugging);
+                debugging.destroy();
             }
 
             // Destroy the instance.
-            ManuallyDrop::drop(&mut self.instance);
+            self.instance.destroy();
         }
     }
 }

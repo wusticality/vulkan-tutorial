@@ -78,14 +78,11 @@ impl Surface {
             .get_physical_device_surface_support(*physical_device, queue_family_index, self.surface)
             .unwrap_or(false)
     }
-}
 
-impl Drop for Surface {
-    fn drop(&mut self) {
-        unsafe {
-            self.functions
-                .destroy_surface(self.surface, None);
-        }
+    /// Destroy the surface.
+    pub(crate) unsafe fn destroy(&mut self) {
+        self.functions
+            .destroy_surface(self.surface, None);
     }
 }
 

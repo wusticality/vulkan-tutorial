@@ -16,7 +16,10 @@ pub struct Swapchain {
     swapchain: vk::SwapchainKHR,
 
     // The swapchain images.
-    images: Vec<vk::Image>
+    images: Vec<vk::Image>,
+
+    // The swapchain image views.
+    views: Vec<vk::ImageView>
 }
 
 impl Swapchain {
@@ -28,13 +31,14 @@ impl Swapchain {
         surface: &Surface
     ) -> Result<Self> {
         let functions = ash::khr::swapchain::Device::new(&instance, &device);
-        let (swapchain, images) = Self::make(window.clone(), device, surface, &functions)?;
+        let (swapchain, images, views) = Self::make(window.clone(), device, surface, &functions)?;
 
         Ok(Self {
             window,
             functions,
             swapchain,
-            images
+            images,
+            views
         })
     }
 
@@ -44,7 +48,7 @@ impl Swapchain {
         device: &Device,
         surface: &Surface,
         functions: &ash::khr::swapchain::Device
-    ) -> Result<(vk::SwapchainKHR, Vec<vk::Image>)> {
+    ) -> Result<(vk::SwapchainKHR, Vec<vk::Image>, Vec<vk::ImageView>)> {
         // Get the available surface formats.
         let available_formats = surface.formats(&device.physical_device())?;
 
@@ -112,7 +116,35 @@ impl Swapchain {
         // Get the swapchain images.
         let images = functions.get_swapchain_images(swapchain)?;
 
-        Ok((swapchain, images))
+        // Create the image views.
+        let views = images
+            .iter()
+            .map(|image| {
+                // Create the image view create info.
+                let create_info = vk::ImageViewCreateInfo::default()
+                    .image(*image)
+                    .view_type(vk::ImageViewType::TYPE_2D)
+                    .format(format.format)
+                    .components(vk::ComponentMapping {
+                        r: vk::ComponentSwizzle::IDENTITY,
+                        g: vk::ComponentSwizzle::IDENTITY,
+                        b: vk::ComponentSwizzle::IDENTITY,
+                        a: vk::ComponentSwizzle::IDENTITY
+                    })
+                    .subresource_range(vk::ImageSubresourceRange {
+                        aspect_mask:      vk::ImageAspectFlags::COLOR,
+                        base_mip_level:   0,
+                        level_count:      1,
+                        base_array_layer: 0,
+                        layer_count:      1
+                    });
+
+                // Create the image view.
+                device.create_image_view(&create_info, None)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok((swapchain, images, views))
     }
 
     /// Compute the extent of the swapchain.
@@ -159,13 +191,16 @@ impl Swapchain {
 
         image_count
     }
-}
 
-impl Drop for Swapchain {
-    fn drop(&mut self) {
-        unsafe {
-            self.functions
-                .destroy_swapchain(self.swapchain, None);
+    /// Destroy the swapchain.
+    pub(crate) unsafe fn destroy(&mut self, device: &Device) {
+        // Destroy the image views.
+        for view in &self.views {
+            device.destroy_image_view(*view, None);
         }
+
+        // Destroy the swapchain.
+        self.functions
+            .destroy_swapchain(self.swapchain, None);
     }
 }

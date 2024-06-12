@@ -76,13 +76,10 @@ impl Instance {
 
         Ok(Self(instance))
     }
-}
 
-impl Drop for Instance {
-    fn drop(&mut self) {
-        unsafe {
-            self.0.destroy_instance(None);
-        }
+    /// Destroy the instance.
+    pub(crate) unsafe fn destroy(&self) {
+        self.0.destroy_instance(None);
     }
 }
 

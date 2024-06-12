@@ -93,13 +93,10 @@ impl Debugging {
             trace!(message);
         }
     }
-}
 
-impl Drop for Debugging {
-    fn drop(&mut self) {
-        unsafe {
-            self.functions
-                .destroy_debug_utils_messenger(self.debug_messenger, None);
-        }
+    /// Destroy the debug messenger.
+    pub(crate) unsafe fn destroy(&mut self) {
+        self.functions
+            .destroy_debug_utils_messenger(self.debug_messenger, None);
     }
 }

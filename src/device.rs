@@ -226,14 +226,10 @@ impl Device {
 
         score
     }
-}
 
-impl Drop for Device {
-    fn drop(&mut self) {
-        unsafe {
-            // Destroy the device.
-            self.device.destroy_device(None);
-        }
+    /// Destroy the device.
+    pub(crate) unsafe fn destroy(&mut self) {
+        self.device.destroy_device(None);
     }
 }
 
