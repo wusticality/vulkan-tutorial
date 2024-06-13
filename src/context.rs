@@ -1,4 +1,6 @@
-use crate::{Debugging, Device, Instance, Pipeline, PipelineSettings, Surface, Swapchain};
+use crate::{
+    Debugging, Device, Instance, Pipeline, PipelineSettings, RenderPass, Surface, Swapchain
+};
 use anyhow::{anyhow, Result};
 use ash::Entry;
 use std::{
@@ -29,6 +31,9 @@ pub struct Context {
     /// The swapchain wrapper.
     swapchain: Swapchain,
 
+    /// The render pass wrapper.
+    render_pass: RenderPass,
+
     /// The pipeline wrapper.
     pipeline: Pipeline
 }
@@ -57,6 +62,9 @@ impl Context {
         // Create the swapchain wrapper.
         let swapchain = Swapchain::new(window.clone(), &instance, &device, &surface)?;
 
+        // Create the render pass wrapper.
+        let render_pass = RenderPass::new(&device, &swapchain)?;
+
         let assets_path = assets_path()?;
 
         // Create the pipeline wrapper.
@@ -76,6 +84,7 @@ impl Context {
             surface,
             device,
             swapchain,
+            render_pass,
             pipeline
         })
     }
@@ -84,10 +93,12 @@ impl Context {
 impl Drop for Context {
     fn drop(&mut self) {
         unsafe {
-            // TODO: Make every component optional and destroy it if anything goes wrong!
-
             // Destroy the pipeline.
             self.pipeline.destroy(&self.device);
+
+            // Destroy the render pass.
+            self.render_pass
+                .destroy(&self.device);
 
             // Destroy the swapchain.
             self.swapchain.destroy(&self.device);

@@ -21,6 +21,9 @@ pub struct Swapchain {
     // The swapchain image views.
     views: Vec<vk::ImageView>,
 
+    // The surface format.
+    format: vk::SurfaceFormatKHR,
+
     // The current extent.
     extent: vk::Extent2D
 }
@@ -34,7 +37,7 @@ impl Swapchain {
         surface: &Surface
     ) -> Result<Self> {
         let functions = ash::khr::swapchain::Device::new(&instance, &device);
-        let (swapchain, images, views, extent) =
+        let (swapchain, images, views, format, extent) =
             Self::make(window.clone(), device, surface, &functions)?;
 
         Ok(Self {
@@ -43,6 +46,7 @@ impl Swapchain {
             swapchain,
             images,
             views,
+            format,
             extent
         })
     }
@@ -57,6 +61,7 @@ impl Swapchain {
         vk::SwapchainKHR,
         Vec<vk::Image>,
         Vec<vk::ImageView>,
+        vk::SurfaceFormatKHR,
         vk::Extent2D
     )> {
         // Get the available surface formats.
@@ -154,7 +159,12 @@ impl Swapchain {
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        Ok((swapchain, images, views, extent))
+        Ok((swapchain, images, views, format, extent))
+    }
+
+    /// The current format.
+    pub fn format(&self) -> vk::SurfaceFormatKHR {
+        self.format
     }
 
     /// The current extent.
