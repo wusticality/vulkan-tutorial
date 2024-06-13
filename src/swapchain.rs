@@ -19,7 +19,10 @@ pub struct Swapchain {
     images: Vec<vk::Image>,
 
     // The swapchain image views.
-    views: Vec<vk::ImageView>
+    views: Vec<vk::ImageView>,
+
+    // The current extent.
+    extent: vk::Extent2D
 }
 
 impl Swapchain {
@@ -31,14 +34,16 @@ impl Swapchain {
         surface: &Surface
     ) -> Result<Self> {
         let functions = ash::khr::swapchain::Device::new(&instance, &device);
-        let (swapchain, images, views) = Self::make(window.clone(), device, surface, &functions)?;
+        let (swapchain, images, views, extent) =
+            Self::make(window.clone(), device, surface, &functions)?;
 
         Ok(Self {
             window,
             functions,
             swapchain,
             images,
-            views
+            views,
+            extent
         })
     }
 
@@ -48,7 +53,12 @@ impl Swapchain {
         device: &Device,
         surface: &Surface,
         functions: &ash::khr::swapchain::Device
-    ) -> Result<(vk::SwapchainKHR, Vec<vk::Image>, Vec<vk::ImageView>)> {
+    ) -> Result<(
+        vk::SwapchainKHR,
+        Vec<vk::Image>,
+        Vec<vk::ImageView>,
+        vk::Extent2D
+    )> {
         // Get the available surface formats.
         let available_formats = surface.formats(&device.physical_device())?;
 
@@ -144,7 +154,12 @@ impl Swapchain {
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        Ok((swapchain, images, views))
+        Ok((swapchain, images, views, extent))
+    }
+
+    /// The current extent.
+    pub fn extent(&self) -> vk::Extent2D {
+        self.extent
     }
 
     /// Compute the extent of the swapchain.

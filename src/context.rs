@@ -87,7 +87,7 @@ impl Drop for Context {
             // TODO: Make every component optional and destroy it if anything goes wrong!
 
             // Destroy the pipeline.
-            self.pipeline.destroy();
+            self.pipeline.destroy(&self.device);
 
             // Destroy the swapchain.
             self.swapchain.destroy(&self.device);
