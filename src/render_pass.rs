@@ -6,7 +6,13 @@ use ash::vk;
 use crate::{Device, Swapchain};
 
 /// Wraps a Vulkan render pass.
-pub struct RenderPass(vk::RenderPass);
+pub struct RenderPass {
+    /// The render pass.
+    render_pass: vk::RenderPass,
+
+    /// The frame buffers.
+    frame_buffers: Vec<vk::Framebuffer>
+}
 
 impl RenderPass {
     /// Create a new render pass.
@@ -37,13 +43,45 @@ impl RenderPass {
             None
         )?;
 
-        Ok(Self(render_pass))
+        // The swapchain extent.
+        let extent = swapchain.extent();
+
+        // Create the frame buffers.
+        let frame_buffers = swapchain
+            .views()
+            .iter()
+            .map(|view| {
+                // The framebuffer attachments.
+                let attachments = [*view];
+
+                // Create the frame buffer create info.
+                let framebuffer_create_info = vk::FramebufferCreateInfo::default()
+                    .render_pass(render_pass)
+                    .attachments(&attachments)
+                    .width(extent.width)
+                    .height(extent.height)
+                    .layers(1);
+
+                // Create the frame buffer.
+                device.create_framebuffer(&framebuffer_create_info, None)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(Self {
+            render_pass,
+            frame_buffers
+        })
     }
 
     /// Destroy the render pass.
     pub(crate) unsafe fn destroy(&mut self, device: &Device) {
+        // Destroy the frame buffers.
+        for frame_buffer in &self.frame_buffers {
+            device.destroy_framebuffer(*frame_buffer, None);
+        }
+
         // Destroy the render pass.
-        device.destroy_render_pass(self.0, None);
+        device.destroy_render_pass(self.render_pass, None);
     }
 }
 
@@ -51,6 +89,6 @@ impl Deref for RenderPass {
     type Target = vk::RenderPass;
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        &self.render_pass
     }
 }

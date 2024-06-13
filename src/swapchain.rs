@@ -162,6 +162,11 @@ impl Swapchain {
         Ok((swapchain, images, views, format, extent))
     }
 
+    /// The image views.
+    pub fn views(&self) -> &Vec<vk::ImageView> {
+        &self.views
+    }
+
     /// The current format.
     pub fn format(&self) -> vk::SurfaceFormatKHR {
         self.format
