@@ -1,4 +1,4 @@
-use crate::{Device, Swapchain};
+use crate::{Device, RenderPass};
 use anyhow::{anyhow, Result};
 use ash::vk;
 use bytemuck::cast_slice;
@@ -16,11 +16,18 @@ pub struct PipelineSettings {
 /// Wraps a Vulkan pipeline.
 pub struct Pipeline {
     /// The pipeline layout.
-    pipeline_layout: vk::PipelineLayout
+    pipeline_layout: vk::PipelineLayout,
+
+    /// The pipeline.
+    pipeline: vk::Pipeline
 }
 
 impl Pipeline {
-    pub unsafe fn new(device: &Device, settings: &PipelineSettings) -> Result<Self> {
+    pub unsafe fn new(
+        device: &Device,
+        render_pass: &RenderPass,
+        settings: &PipelineSettings
+    ) -> Result<Self> {
         // Create the shaders.
         let vert_shader = Self::load_shader(device, &settings.vert_shader_path)?;
         let frag_shader = Self::load_shader(device, &settings.frag_shader_path)?;
@@ -61,6 +68,7 @@ impl Pipeline {
             .depth_clamp_enable(false)
             .rasterizer_discard_enable(false)
             .polygon_mode(vk::PolygonMode::FILL)
+            .line_width(1.0)
             .cull_mode(vk::CullModeFlags::BACK)
             .front_face(vk::FrontFace::CLOCKWISE)
             .depth_bias_enable(false);
@@ -85,11 +93,38 @@ impl Pipeline {
         // Create the pipeline layout.
         let pipeline_layout = device.create_pipeline_layout(&pipeline_layout_create_info, None)?;
 
+        // Create the pipeline create info.
+        let pipeline_create_info = vk::GraphicsPipelineCreateInfo::default()
+            .stages(&shader_stage_create_infos)
+            .vertex_input_state(&vertex_input_state_create_info)
+            .input_assembly_state(&input_assembly_state_create_info)
+            .viewport_state(&viewport_state_create_info)
+            .rasterization_state(&rasterization_state_create_info)
+            .multisample_state(&multisample_state_create_info)
+            .color_blend_state(&color_blend_state_create_info)
+            .dynamic_state(&dynamic_state_create_info)
+            .layout(pipeline_layout)
+            .render_pass(**render_pass)
+            .subpass(0);
+
+        // Create the pipeline.
+        let pipeline = match device.create_graphics_pipelines(
+            vk::PipelineCache::null(),
+            &[pipeline_create_info],
+            None
+        ) {
+            Ok(pipelines) => pipelines,
+            _ => return Err(anyhow!("Failed to create graphics pipeline."))
+        }[0];
+
         // Destroy the shaders.
         device.destroy_shader_module(vert_shader, None);
         device.destroy_shader_module(frag_shader, None);
 
-        Ok(Self { pipeline_layout })
+        Ok(Self {
+            pipeline_layout,
+            pipeline
+        })
     }
 
     /// Load a shader.
@@ -116,6 +151,9 @@ impl Pipeline {
 
     /// Destroy the pipeline.
     pub(crate) unsafe fn destroy(&mut self, device: &Device) {
+        // Destroy the pipeline.
+        device.destroy_pipeline(self.pipeline, None);
+
         // Destroy the pipeline layout.
         device.destroy_pipeline_layout(self.pipeline_layout, None);
     }

@@ -70,6 +70,7 @@ impl Context {
         // Create the pipeline wrapper.
         let pipeline = Pipeline::new(
             &device,
+            &render_pass,
             &PipelineSettings {
                 vert_shader_path: assets_path.join("shaders/shader.vert.spv"),
                 frag_shader_path: assets_path.join("shaders/shader.frag.spv")
