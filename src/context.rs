@@ -2,7 +2,7 @@ use crate::{
     Debugging, Device, Instance, Pipeline, PipelineSettings, RenderPass, Surface, Swapchain
 };
 use anyhow::{anyhow, Result};
-use ash::Entry;
+use ash::{vk, Entry};
 use std::{
     env::current_exe, ffi::CStr, fs::canonicalize, mem::ManuallyDrop, path::PathBuf, sync::Arc
 };
@@ -88,6 +88,21 @@ impl Context {
             render_pass,
             pipeline
         })
+    }
+
+    /// Draw the frame.
+    pub unsafe fn draw(&self) -> Result<()> {
+        // Grab the command buffer.
+        let command_buffer = self.device.command_buffer();
+
+        // Create the begin info.
+        let begin_info = vk::CommandBufferBeginInfo::default();
+
+        // Begin the command buffer.
+        self.device
+            .begin_command_buffer(*command_buffer, &begin_info)?;
+
+        Ok(())
     }
 }
 

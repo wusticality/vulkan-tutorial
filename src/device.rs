@@ -13,7 +13,13 @@ pub struct Device {
     device: ash::Device,
 
     /// The graphics queue.
-    queue: vk::Queue
+    queue: vk::Queue,
+
+    /// The command pool.
+    command_pool: vk::CommandPool,
+
+    /// The command buffer.
+    command_buffer: vk::CommandBuffer
 }
 
 impl Device {
@@ -124,10 +130,29 @@ impl Device {
         // Get the queue.
         let queue = device.get_device_queue(*queue_family_index, 0);
 
+        // Create the command pool create info.
+        let command_pool_create_info = vk::CommandPoolCreateInfo::default()
+            .queue_family_index(*queue_family_index)
+            .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER);
+
+        // Create the command pool.
+        let command_pool = device.create_command_pool(&command_pool_create_info, None)?;
+
+        // Create the command buffer create info.
+        let command_buffer_create_info = vk::CommandBufferAllocateInfo::default()
+            .command_pool(command_pool)
+            .level(vk::CommandBufferLevel::PRIMARY)
+            .command_buffer_count(1);
+
+        // Create the command buffer.
+        let command_buffer = device.allocate_command_buffers(&command_buffer_create_info)?[0];
+
         Ok(Self {
             physical_device: *physical_device,
             device,
-            queue
+            queue,
+            command_pool,
+            command_buffer
         })
     }
 
@@ -139,6 +164,11 @@ impl Device {
     // Returns the queue.
     pub fn queue(&self) -> &vk::Queue {
         &self.queue
+    }
+
+    // Returns the command buffer.
+    pub fn command_buffer(&self) -> &vk::CommandBuffer {
+        &self.command_buffer
     }
 
     // Checks if the device has the required extensions.
@@ -229,6 +259,11 @@ impl Device {
 
     /// Destroy the device.
     pub(crate) unsafe fn destroy(&mut self) {
+        // Destroy the command pool.
+        self.device
+            .destroy_command_pool(self.command_pool, None);
+
+        // Destroy the device.
         self.device.destroy_device(None);
     }
 }

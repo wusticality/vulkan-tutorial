@@ -73,6 +73,38 @@ impl RenderPass {
         })
     }
 
+    /// Begin the render pass.
+    pub(crate) unsafe fn begin(
+        &self,
+        device: &Device,
+        swapchain: &Swapchain,
+        command_buffer: &vk::CommandBuffer,
+        present_index: u32
+    ) {
+        // The swapchain extent.
+        let extent = swapchain.extent();
+
+        // Create the begin info.
+        let begin_info = vk::RenderPassBeginInfo::default()
+            .render_pass(self.render_pass)
+            .framebuffer(self.frame_buffers[present_index as usize])
+            .render_area(extent.into())
+            .clear_values(&[vk::ClearValue {
+                color: vk::ClearColorValue {
+                    float32: [0.0, 0.0, 0.0, 1.0]
+                }
+            }]);
+
+        // Begin the render pass.
+        device.cmd_begin_render_pass(*command_buffer, &begin_info, vk::SubpassContents::INLINE);
+    }
+
+    /// End the render pass.
+    pub(crate) unsafe fn end(&self, device: &Device, command_buffer: &vk::CommandBuffer) {
+        // End the render pass.
+        device.cmd_end_render_pass(*command_buffer);
+    }
+
     /// Destroy the render pass.
     pub(crate) unsafe fn destroy(&mut self, device: &Device) {
         // Destroy the frame buffers.

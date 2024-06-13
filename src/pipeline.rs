@@ -1,4 +1,4 @@
-use crate::{Device, RenderPass};
+use crate::{Device, RenderPass, Swapchain};
 use anyhow::{anyhow, Result};
 use ash::vk;
 use bytemuck::cast_slice;
@@ -125,6 +125,44 @@ impl Pipeline {
             pipeline_layout,
             pipeline
         })
+    }
+
+    /// Draw the pipeline.
+    pub(crate) unsafe fn draw(
+        &self,
+        device: &Device,
+        swapchain: &Swapchain,
+        command_buffer: &vk::CommandBuffer
+    ) {
+        // First, bind the pipeline.
+        device.cmd_bind_pipeline(
+            *command_buffer,
+            vk::PipelineBindPoint::GRAPHICS,
+            self.pipeline
+        );
+
+        // Get the swapchain extent.
+        let extent = swapchain.extent();
+
+        // Set the viewport state.
+        device.cmd_set_viewport(
+            *command_buffer,
+            0,
+            &[vk::Viewport {
+                x:         0.0,
+                y:         0.0,
+                width:     extent.width as f32,
+                height:    extent.height as f32,
+                min_depth: 0.0,
+                max_depth: 1.0
+            }]
+        );
+
+        // Set the scissor state.
+        device.cmd_set_scissor(*command_buffer, 0, &[extent.into()]);
+
+        // Issue the draw command.
+        device.cmd_draw(*command_buffer, 3, 1, 0, 0);
     }
 
     /// Load a shader.
