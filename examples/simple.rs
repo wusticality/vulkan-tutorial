@@ -9,7 +9,7 @@ use winit::{
     application::ApplicationHandler,
     dpi::PhysicalSize,
     event::WindowEvent,
-    event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
+    event_loop::{self, ActiveEventLoop, ControlFlow, EventLoop},
     keyboard::{Key, NamedKey},
     window::{Window, WindowId}
 };
@@ -17,6 +17,9 @@ use winit::{
 /// The app.
 #[derive(Default)]
 struct App {
+    /// Whether we are setup.
+    initialized: bool,
+
     /// The window.
     window: Option<Arc<Window>>,
 
@@ -24,25 +27,48 @@ struct App {
     context: Option<Context>
 }
 
-impl ApplicationHandler for App {
-    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        // Create the window.
+impl App {
+    /// Initialize the app. This creates the window and initializes Vulkan.
+    fn initialize(&mut self, event_loop: &ActiveEventLoop) -> Result<()> {
+        // If we're already initialized, return.
+        if self.initialized {
+            return Ok(());
+        }
+
+        // Create the window attributes.
         let attributes = Window::default_attributes()
             .with_resizable(false)
             .with_inner_size(PhysicalSize::new(2048, 1536));
-        let window = event_loop
-            .create_window(attributes)
-            .unwrap();
+
+        // Create the window.
+        let window = event_loop.create_window(attributes)?;
         let window = Arc::new(window);
 
-        self.window = Some(window.clone());
+        // The application name.
+        let name = CStr::from_bytes_with_nul(b"vulkan-tutorial\0")?;
 
-        unsafe {
-            // The application name.
-            let name = CStr::from_bytes_with_nul_unchecked(b"vulkan-tutorial\0");
+        // Create the vulkan context.
+        let context = unsafe { Context::new(window.clone(), &name)? };
 
-            // Create the vulkan context.
-            self.context = Some(Context::new(window, &name).unwrap());
+        self.initialized = true;
+        self.window = Some(window);
+        self.context = Some(context);
+
+        Ok(())
+    }
+}
+
+impl ApplicationHandler for App {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        // TODO: Teardown the vulkan context in suspended
+        // and recreate it here or you'll run into issues
+        // on mobile devices.
+
+        // Setup the app.
+        if let Err(e) = self.initialize(event_loop) {
+            error!("{}", e);
+
+            event_loop.exit();
         }
     }
 
