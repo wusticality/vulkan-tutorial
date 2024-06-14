@@ -51,6 +51,40 @@ impl Swapchain {
         })
     }
 
+    /// Acquire the next image in the swapchain.
+    /// Returns the index of the acquired image.
+    pub unsafe fn acquire(&self, semaphore: &vk::Semaphore) -> Result<u32> {
+        // TODO: Handle the suboptimal case!
+
+        let (index, _suboptimal) = self.functions.acquire_next_image(
+            self.swapchain,
+            std::u64::MAX,
+            *semaphore,
+            vk::Fence::null()
+        )?;
+
+        Ok(index)
+    }
+
+    /// Present the current image.
+    pub unsafe fn present(
+        &self,
+        device: &Device,
+        semaphore: &vk::Semaphore,
+        present_index: u32
+    ) -> Result<()> {
+        // Present the image.
+        self.functions.queue_present(
+            *device.queue(),
+            &vk::PresentInfoKHR::default()
+                .wait_semaphores(&[*semaphore])
+                .swapchains(&[self.swapchain])
+                .image_indices(&[present_index])
+        )?;
+
+        Ok(())
+    }
+
     /// Create a new swapchain.
     unsafe fn make(
         window: Arc<Window>,

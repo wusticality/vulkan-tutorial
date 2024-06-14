@@ -84,6 +84,16 @@ impl ApplicationHandler for App {
             },
 
             WindowEvent::RedrawRequested => {
+                // Render the frame.
+                if let Some(context) = &mut self.context {
+                    if let Err(e) = unsafe { context.draw() } {
+                        error!("{}", e);
+
+                        event_loop.exit();
+                    }
+                }
+
+                // Request a redraw.
                 if let Some(window) = &mut self.window {
                     window.request_redraw();
                 }

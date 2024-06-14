@@ -39,7 +39,16 @@ impl RenderPass {
                     .color_attachments(&[vk::AttachmentReference {
                         attachment: 0,
                         layout:     vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL
-                    }])]),
+                    }])])
+                .dependencies(&[vk::SubpassDependency {
+                    src_subpass: vk::SUBPASS_EXTERNAL,
+                    dst_subpass: 0,
+                    src_stage_mask: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+                    src_access_mask: vk::AccessFlags::empty(),
+                    dst_stage_mask: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+                    dst_access_mask: vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+                    ..Default::default()
+                }]),
             None
         )?;
 
