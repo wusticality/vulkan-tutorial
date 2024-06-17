@@ -9,9 +9,9 @@ use winit::{
     application::ApplicationHandler,
     dpi::PhysicalSize,
     event::WindowEvent,
-    event_loop::{self, ActiveEventLoop, ControlFlow, EventLoop},
+    event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
     keyboard::{Key, NamedKey},
-    window::{Window, WindowId},
+    window::{Window, WindowId}
 };
 
 /// The app.
@@ -24,7 +24,7 @@ struct App {
     window: Option<Arc<Window>>,
 
     /// The vulkan context.
-    context: Option<Context>,
+    context: Option<Context>
 }
 
 impl App {
@@ -81,7 +81,7 @@ impl ApplicationHandler for App {
         &mut self,
         event_loop: &ActiveEventLoop,
         _window_id: WindowId,
-        event: WindowEvent,
+        event: WindowEvent
     ) {
         match event {
             WindowEvent::CloseRequested => {
@@ -107,16 +107,16 @@ impl ApplicationHandler for App {
             WindowEvent::KeyboardInput {
                 device_id: _,
                 event,
-                is_synthetic: _,
+                is_synthetic: _
             } => match event.logical_key {
                 Key::Named(key) if key == NamedKey::Escape => {
                     event_loop.exit();
                 },
 
-                _ => {},
+                _ => {}
             },
 
-            _ => {},
+            _ => {}
         }
     }
 }

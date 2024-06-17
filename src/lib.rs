@@ -1,3 +1,4 @@
+mod command_pool;
 mod context;
 mod debugging;
 mod device;
@@ -7,6 +8,7 @@ mod render_pass;
 mod surface;
 mod swapchain;
 
+pub use command_pool::*;
 pub use context::*;
 pub use debugging::*;
 pub use device::*;

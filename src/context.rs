@@ -1,11 +1,10 @@
 use crate::{
-    Debugging, Device, Instance, Pipeline, PipelineSettings, RenderPass, Surface, Swapchain
+    command_pool::CommandPool, Debugging, Device, Instance, Pipeline, PipelineSettings, RenderPass,
+    Surface, Swapchain
 };
 use anyhow::{anyhow, Result};
 use ash::{vk, Entry};
-use std::{
-    env::current_exe, ffi::CStr, fs::canonicalize, mem::ManuallyDrop, path::PathBuf, sync::Arc
-};
+use std::{env::current_exe, ffi::CStr, fs::canonicalize, path::PathBuf, sync::Arc};
 use winit::window::Window;
 
 /// The Vulkan context.
@@ -13,11 +12,8 @@ pub struct Context {
     /// A handle to the window.
     window: Arc<Window>,
 
-    /// A handle to the vulkan library.
-    entry: ash::Entry,
-
     /// The instance wrapper.
-    instance: ManuallyDrop<Instance>,
+    instance: Instance,
 
     /// The debugging wrapper.
     debugging: Option<Debugging>,
@@ -28,6 +24,9 @@ pub struct Context {
     /// The device wrapper.
     device: Device,
 
+    /// The command pool.
+    command_pool: CommandPool,
+
     /// The swapchain wrapper.
     swapchain: Swapchain,
 
@@ -36,6 +35,9 @@ pub struct Context {
 
     /// The pipeline wrapper.
     pipeline: Pipeline,
+
+    /// The command buffer.
+    command_buffer: vk::CommandBuffer,
 
     /// The image ready semaphore.
     semaphore_image_ready: vk::Semaphore,
@@ -54,7 +56,7 @@ impl Context {
         let entry = Entry::linked();
 
         // Create the instance wrapper.
-        let instance = ManuallyDrop::new(Instance::new(window.clone(), &entry, name)?);
+        let instance = Instance::new(window.clone(), &entry, name)?;
 
         // Capture messages for everything else.
         let debugging = match cfg!(debug_assertions) {
@@ -67,6 +69,9 @@ impl Context {
 
         // Create the device wrapper.
         let device = Device::new(&instance, &surface)?;
+
+        // Create the command pool wrapper.
+        let command_pool = CommandPool::new(&device)?;
 
         // Create the swapchain wrapper.
         let swapchain = Swapchain::new(window.clone(), &instance, &device, &surface)?;
@@ -86,6 +91,9 @@ impl Context {
             }
         )?;
 
+        // Create the command buffer.
+        let command_buffer = command_pool.new_command_buffer(&device)?;
+
         // Create the semaphores.
         let semaphore_image_ready = device.create_semaphore(&Default::default(), None)?;
         let semaphore_render_done = device.create_semaphore(&Default::default(), None)?;
@@ -102,14 +110,15 @@ impl Context {
 
         Ok(Self {
             window,
-            entry,
             instance,
             debugging,
             surface,
             device,
+            command_pool,
             swapchain,
             render_pass,
             pipeline,
+            command_buffer,
             semaphore_image_ready,
             semaphore_render_done,
             fence_frame_done
@@ -131,12 +140,12 @@ impl Context {
             .swapchain
             .acquire(&self.semaphore_image_ready)?;
 
-        // Grab the command buffer.
-        let command_buffer = self.device.command_buffer();
+        // Get a reference to the command buffer.
+        let command_buffer = &self.command_buffer;
 
         // Reset the command buffer.
         self.device
-            .reset_command_buffer(*command_buffer, vk::CommandBufferResetFlags::empty())?;
+            .reset_command_buffer(self.command_buffer, vk::CommandBufferResetFlags::empty())?;
 
         // Create the begin info.
         let begin_info = vk::CommandBufferBeginInfo::default();
@@ -210,6 +219,10 @@ impl Drop for Context {
 
             // Destroy the swapchain.
             self.swapchain.destroy(&self.device);
+
+            // Destroy the command pool.
+            self.command_pool
+                .destroy(&self.device);
 
             // Destroy the device.
             self.device.destroy();

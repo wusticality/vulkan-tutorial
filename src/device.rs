@@ -15,11 +15,8 @@ pub struct Device {
     /// The graphics queue.
     queue: vk::Queue,
 
-    /// The command pool.
-    command_pool: vk::CommandPool,
-
-    /// The command buffer.
-    command_buffer: vk::CommandBuffer
+    /// The queue family index.
+    queue_family_index: u32
 }
 
 impl Device {
@@ -135,48 +132,30 @@ impl Device {
         // Get the queue.
         let queue = device.get_device_queue(*queue_family_index, 0);
 
-        // Create the command pool create info.
-        let command_pool_create_info = vk::CommandPoolCreateInfo::default()
-            .queue_family_index(*queue_family_index)
-            .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER);
-
-        // Create the command pool.
-        let command_pool = device.create_command_pool(&command_pool_create_info, None)?;
-
-        // Create the command buffer create info.
-        let command_buffer_create_info = vk::CommandBufferAllocateInfo::default()
-            .command_pool(command_pool)
-            .level(vk::CommandBufferLevel::PRIMARY)
-            .command_buffer_count(1);
-
-        // Create the command buffer.
-        let command_buffer = device.allocate_command_buffers(&command_buffer_create_info)?[0];
-
         Ok(Self {
             physical_device: *physical_device,
             device,
             queue,
-            command_pool,
-            command_buffer
+            queue_family_index: *queue_family_index
         })
     }
 
-    // Returns the physical device.
+    /// Returns the physical device.
     pub fn physical_device(&self) -> &vk::PhysicalDevice {
         &self.physical_device
     }
 
-    // Returns the queue.
+    /// Returns the queue.
     pub fn queue(&self) -> &vk::Queue {
         &self.queue
     }
 
-    // Returns the command buffer.
-    pub fn command_buffer(&self) -> &vk::CommandBuffer {
-        &self.command_buffer
+    /// Returns the queue family index.
+    pub fn queue_family_index(&self) -> u32 {
+        self.queue_family_index
     }
 
-    // Checks if the device has the required extensions.
+    /// Checks if the device has the required extensions.
     unsafe fn device_has_extensions(
         instance: &ash::Instance,
         physical_device: &vk::PhysicalDevice,
@@ -208,7 +187,7 @@ impl Device {
         }
     }
 
-    // Returns true if the device is suitable.
+    /// Returns true if the device is suitable.
     unsafe fn is_suitable(
         instance: &Instance,
         surface: &Surface,
@@ -264,10 +243,6 @@ impl Device {
 
     /// Destroy the device.
     pub(crate) unsafe fn destroy(&mut self) {
-        // Destroy the command pool.
-        self.device
-            .destroy_command_pool(self.command_pool, None);
-
         // Destroy the device.
         self.device.destroy_device(None);
     }
