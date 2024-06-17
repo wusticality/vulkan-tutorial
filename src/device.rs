@@ -25,7 +25,12 @@ pub struct Device {
 impl Device {
     pub unsafe fn new(instance: &Instance, surface: &Surface) -> Result<Self> {
         // We at least require the swapchain extension.
-        let required_extensions = vec![ash::khr::swapchain::NAME];
+        let mut required_extensions = vec![ash::khr::swapchain::NAME];
+
+        // On macOS, we also require the portability extension.
+        if cfg!(target_os = "macos") {
+            required_extensions.push(ash::khr::portability_subset::NAME);
+        }
 
         // Print the required device extensions.
         for extension in &required_extensions {

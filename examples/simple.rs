@@ -11,7 +11,7 @@ use winit::{
     event::WindowEvent,
     event_loop::{self, ActiveEventLoop, ControlFlow, EventLoop},
     keyboard::{Key, NamedKey},
-    window::{Window, WindowId}
+    window::{Window, WindowId},
 };
 
 /// The app.
@@ -24,7 +24,7 @@ struct App {
     window: Option<Arc<Window>>,
 
     /// The vulkan context.
-    context: Option<Context>
+    context: Option<Context>,
 }
 
 impl App {
@@ -70,13 +70,18 @@ impl ApplicationHandler for App {
 
             event_loop.exit();
         }
+
+        // Request the first redraw.
+        if let Some(window) = &mut self.window {
+            window.request_redraw();
+        }
     }
 
     fn window_event(
         &mut self,
         event_loop: &ActiveEventLoop,
         _window_id: WindowId,
-        event: WindowEvent
+        event: WindowEvent,
     ) {
         match event {
             WindowEvent::CloseRequested => {
@@ -102,16 +107,16 @@ impl ApplicationHandler for App {
             WindowEvent::KeyboardInput {
                 device_id: _,
                 event,
-                is_synthetic: _
+                is_synthetic: _,
             } => match event.logical_key {
                 Key::Named(key) if key == NamedKey::Escape => {
                     event_loop.exit();
                 },
 
-                _ => {}
+                _ => {},
             },
 
-            _ => {}
+            _ => {},
         }
     }
 }

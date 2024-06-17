@@ -1,0 +1,10 @@
+# Look for dynamic libraries relative to the executable.
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-C", "link-arg=-Wl,-rpath=,$ORIGIN"]
+
+[target.aarch64-apple-darwin]
+rustflags = ["-C", "link-arg=-Wl,-rpath,@executable_path"]
+
+# Environment variables.
+[env]
+WORKSPACE_DIR = { relative = true, force = true, value = "" }

@@ -71,11 +71,8 @@ impl Debugging {
 
         let message = unsafe {
             format!(
-                "{:?}: {} (0x{:x?}) {}",
+                "{:?}: (0x{:x?}) {}",
                 message_types,
-                CStr::from_ptr(callback_data.p_message_id_name)
-                    .to_str()
-                    .unwrap(),
                 callback_data.message_id_number,
                 CStr::from_ptr(callback_data.p_message)
                     .to_str()

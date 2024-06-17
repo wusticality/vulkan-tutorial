@@ -2,6 +2,10 @@
 name = "vulkan"
 version = "0.1.0"
 edition = "2021"
+build = "build.rs"
+
+[build-dependencies]
+anyhow = "1.0"
 
 [dev-dependencies]
 anyhow = "1.0"

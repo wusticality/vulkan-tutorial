@@ -39,6 +39,7 @@ impl Instance {
             // This is required on macOS.
             if cfg!(target_os = "macos") {
                 extensions.push(ash::khr::portability_enumeration::NAME.as_ptr());
+                extensions.push(ash::khr::get_physical_device_properties2::NAME.as_ptr());
             }
 
             // If we're in debug mode, add the extension that
