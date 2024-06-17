@@ -1,21 +1,20 @@
-use std::{ffi::CStr, sync::Arc};
+use std::{ffi::CStr, sync::Arc, time::Instant};
 
 use anyhow::Result;
-use tracing::{error, level_filters::LevelFilter, subscriber::set_global_default, Level};
+use tracing::{debug, error, level_filters::LevelFilter, subscriber::set_global_default, Level};
 use tracing_log::LogTracer;
 use tracing_subscriber::FmtSubscriber;
 use vulkan::Context;
 use winit::{
     application::ApplicationHandler,
     dpi::PhysicalSize,
-    event::WindowEvent,
+    event::{StartCause, WindowEvent},
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
     keyboard::{Key, NamedKey},
     window::{Window, WindowId}
 };
 
 /// The app.
-#[derive(Default)]
 struct App {
     /// Whether we are setup.
     initialized: bool,
@@ -24,7 +23,25 @@ struct App {
     window: Option<Arc<Window>>,
 
     /// The vulkan context.
-    context: Option<Context>
+    context: Option<Context>,
+
+    /// The fps timer.
+    fps_timer: Instant,
+
+    /// The fps count.
+    fps_count: u32
+}
+
+impl Default for App {
+    fn default() -> Self {
+        Self {
+            initialized: false,
+            window:      None,
+            context:     None,
+            fps_timer:   Instant::now(),
+            fps_count:   0
+        }
+    }
 }
 
 impl App {
@@ -53,16 +70,33 @@ impl App {
         self.initialized = true;
         self.window = Some(window);
         self.context = Some(context);
+        self.fps_timer = Instant::now();
 
         Ok(())
     }
 }
 
 impl ApplicationHandler for App {
+    fn new_events(&mut self, _event_loop: &ActiveEventLoop, _cause: StartCause) {
+        // Print the fps every second.
+        if self
+            .fps_timer
+            .elapsed()
+            .as_secs_f32()
+            >= 1.0
+        {
+            debug!("fps: {}", self.fps_count);
+
+            // Reset the timer / counter.
+            self.fps_timer = Instant::now();
+            self.fps_count = 0;
+        }
+    }
+
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         // TODO: Teardown the vulkan context in suspended
-        // and recreate it here or you'll run into issues
-        // on mobile devices.
+        //  and recreate it here or you'll run into issues
+        //  on mobile devices.
 
         // Setup the app.
         if let Err(e) = self.initialize(event_loop) {
@@ -97,6 +131,9 @@ impl ApplicationHandler for App {
                         event_loop.exit();
                     }
                 }
+
+                // Increment the fps count.
+                self.fps_count += 1;
 
                 // Request a redraw.
                 if let Some(window) = &mut self.window {

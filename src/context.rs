@@ -4,8 +4,65 @@ use crate::{
 };
 use anyhow::{anyhow, Result};
 use ash::{vk, Entry};
-use std::{env::current_exe, ffi::CStr, fs::canonicalize, path::PathBuf, sync::Arc};
+use std::{cmp::max, env::current_exe, ffi::CStr, fs::canonicalize, path::PathBuf, sync::Arc};
+use tracing::info;
 use winit::window::Window;
+
+/// The maximum number of frames in flight.
+const FRAMES_IN_FLIGHT: u32 = 2;
+
+/// Per-frame data.
+struct PerFrameData {
+    /// The command buffer.
+    pub command_buffer: vk::CommandBuffer,
+
+    /// The image ready semaphore.
+    pub semaphore_image_ready: vk::Semaphore,
+
+    /// The render done semaphore.
+    pub semaphore_render_done: vk::Semaphore,
+
+    /// The frame done fence.
+    pub fence_frame_done: vk::Fence
+}
+
+impl PerFrameData {
+    pub unsafe fn new(device: &Device, command_pool: &CommandPool) -> Result<Self> {
+        // Create the command buffer.
+        let command_buffer = command_pool.new_command_buffer(&device)?;
+
+        // Create the semaphores.
+        let semaphore_image_ready = device.create_semaphore(&Default::default(), None)?;
+        let semaphore_render_done = device.create_semaphore(&Default::default(), None)?;
+
+        // Create the fence. Start in the signaled state so that the first
+        // frame doesn't wait indefinitely for the fence to be signaled.
+        let fence_frame_done = device.create_fence(
+            &vk::FenceCreateInfo {
+                flags: vk::FenceCreateFlags::SIGNALED,
+                ..Default::default()
+            },
+            None
+        )?;
+
+        Ok(Self {
+            command_buffer,
+            semaphore_image_ready,
+            semaphore_render_done,
+            fence_frame_done
+        })
+    }
+
+    /// Destroy the per-frame data.
+    pub unsafe fn destroy(&mut self, device: &Device) {
+        // Destroy the fence.
+        device.destroy_fence(self.fence_frame_done, None);
+
+        // Destroy the semaphores.
+        device.destroy_semaphore(self.semaphore_image_ready, None);
+        device.destroy_semaphore(self.semaphore_render_done, None);
+    }
+}
 
 /// The Vulkan context.
 pub struct Context {
@@ -24,6 +81,9 @@ pub struct Context {
     /// The device wrapper.
     device: Device,
 
+    /// The number of frames in flight.
+    frames_in_flight: u32,
+
     /// The command pool.
     command_pool: CommandPool,
 
@@ -36,17 +96,11 @@ pub struct Context {
     /// The pipeline wrapper.
     pipeline: Pipeline,
 
-    /// The command buffer.
-    command_buffer: vk::CommandBuffer,
+    /// The per-frame data.
+    per_frame_data: Vec<PerFrameData>,
 
-    /// The image ready semaphore.
-    semaphore_image_ready: vk::Semaphore,
-
-    /// The render done semaphore.
-    semaphore_render_done: vk::Semaphore,
-
-    /// The frame done fence.
-    fence_frame_done: vk::Fence
+    /// The per-frame index.
+    per_frame_index: usize
 }
 
 impl Context {
@@ -70,15 +124,27 @@ impl Context {
         // Create the device wrapper.
         let device = Device::new(&instance, &surface)?;
 
+        // Compute how many frames we can have in flight.
+        let frames_in_flight = Self::frames_in_flight(&device, &surface)?;
+
+        info!("Frames in flight: {}", frames_in_flight);
+
         // Create the command pool wrapper.
         let command_pool = CommandPool::new(&device)?;
 
         // Create the swapchain wrapper.
-        let swapchain = Swapchain::new(window.clone(), &instance, &device, &surface)?;
+        let swapchain = Swapchain::new(
+            window.clone(),
+            &instance,
+            &device,
+            &surface,
+            frames_in_flight
+        )?;
 
         // Create the render pass wrapper.
         let render_pass = RenderPass::new(&device, &swapchain)?;
 
+        // The path to our assets.
         let assets_path = assets_path()?;
 
         // Create the pipeline wrapper.
@@ -91,22 +157,10 @@ impl Context {
             }
         )?;
 
-        // Create the command buffer.
-        let command_buffer = command_pool.new_command_buffer(&device)?;
-
-        // Create the semaphores.
-        let semaphore_image_ready = device.create_semaphore(&Default::default(), None)?;
-        let semaphore_render_done = device.create_semaphore(&Default::default(), None)?;
-
-        // Create the fence. Start in the signaled state so that the first
-        // frame doesn't wait indefinitely for the fence to be signaled.
-        let fence_frame_done = device.create_fence(
-            &vk::FenceCreateInfo {
-                flags: vk::FenceCreateFlags::SIGNALED,
-                ..Default::default()
-            },
-            None
-        )?;
+        // Create the per-frame data.
+        let per_frame_data = (0..frames_in_flight)
+            .map(|_| PerFrameData::new(&device, &command_pool))
+            .collect::<Result<Vec<_>>>()?;
 
         Ok(Self {
             window,
@@ -114,78 +168,100 @@ impl Context {
             debugging,
             surface,
             device,
+            frames_in_flight,
             command_pool,
             swapchain,
             render_pass,
             pipeline,
-            command_buffer,
-            semaphore_image_ready,
-            semaphore_render_done,
-            fence_frame_done
+            per_frame_data,
+            per_frame_index: 0
         })
     }
 
     /// Draw the frame.
-    pub unsafe fn draw(&self) -> Result<()> {
+    pub unsafe fn draw(&mut self) -> Result<()> {
+        // Get the per-frame data.
+        let per_frame_data = &self.per_frame_data[self.per_frame_index];
+
+        // Get references to our synchronization objects.
+        let command_buffer = per_frame_data.command_buffer;
+        let semaphore_image_ready = per_frame_data.semaphore_image_ready;
+        let semaphore_render_done = per_frame_data.semaphore_render_done;
+        let fence_frame_done = per_frame_data.fence_frame_done;
+
         // Wait for the fence indefinitely.
         self.device
-            .wait_for_fences(&[self.fence_frame_done], true, std::u64::MAX)?;
+            .wait_for_fences(&[fence_frame_done], true, std::u64::MAX)?;
 
         // Reset the fence.
         self.device
-            .reset_fences(&[self.fence_frame_done])?;
+            .reset_fences(&[fence_frame_done])?;
 
         // Acquire the next swapchain image.
         let present_index = self
             .swapchain
-            .acquire(&self.semaphore_image_ready)?;
-
-        // Get a reference to the command buffer.
-        let command_buffer = &self.command_buffer;
+            .acquire(&semaphore_image_ready)?;
 
         // Reset the command buffer.
         self.device
-            .reset_command_buffer(self.command_buffer, vk::CommandBufferResetFlags::empty())?;
+            .reset_command_buffer(command_buffer, vk::CommandBufferResetFlags::empty())?;
 
         // Create the begin info.
         let begin_info = vk::CommandBufferBeginInfo::default();
 
         // Begin the command buffer.
         self.device
-            .begin_command_buffer(*command_buffer, &begin_info)?;
+            .begin_command_buffer(command_buffer, &begin_info)?;
 
         // Begin the render pass.
-        self.render_pass
-            .begin(&self.device, &self.swapchain, command_buffer, present_index);
+        self.render_pass.begin(
+            &self.device,
+            &self.swapchain,
+            &command_buffer,
+            present_index
+        );
 
         // Draw the pipeline.
         self.pipeline
-            .draw(&self.device, &self.swapchain, command_buffer);
+            .draw(&self.device, &self.swapchain, &command_buffer);
 
         // End the render pass.
         self.render_pass
-            .end(&self.device, command_buffer);
+            .end(&self.device, &command_buffer);
 
         // End the command buffer.
         self.device
-            .end_command_buffer(*command_buffer)?;
+            .end_command_buffer(command_buffer)?;
 
         // Create the submit info.
         let submit_info = vk::SubmitInfo::default()
-            .wait_semaphores(std::slice::from_ref(&self.semaphore_image_ready))
+            .wait_semaphores(std::slice::from_ref(&semaphore_image_ready))
             .wait_dst_stage_mask(&[vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT])
-            .command_buffers(std::slice::from_ref(command_buffer))
-            .signal_semaphores(std::slice::from_ref(&self.semaphore_render_done));
+            .command_buffers(std::slice::from_ref(&command_buffer))
+            .signal_semaphores(std::slice::from_ref(&semaphore_render_done));
 
         // Submit the command buffer.
         self.device
-            .queue_submit(*self.device.queue(), &[submit_info], self.fence_frame_done)?;
+            .queue_submit(*self.device.queue(), &[submit_info], fence_frame_done)?;
 
         // Present the image.
         self.swapchain
-            .present(&self.device, &self.semaphore_render_done, present_index)?;
+            .present(&self.device, &semaphore_render_done, present_index)?;
+
+        // Advance the per-frame index.
+        self.per_frame_index = (self.per_frame_index + 1) % self.frames_in_flight as usize;
 
         Ok(())
+    }
+
+    /// Compute the frames in flight.
+    unsafe fn frames_in_flight(device: &Device, surface: &Surface) -> Result<u32> {
+        let capabilities = surface.capabilities(&device.physical_device())?;
+
+        Ok(match capabilities.max_image_count {
+            0 => max(FRAMES_IN_FLIGHT, capabilities.min_image_count),
+            _ => FRAMES_IN_FLIGHT.clamp(capabilities.min_image_count, capabilities.max_image_count)
+        })
     }
 }
 
@@ -200,15 +276,10 @@ impl Drop for Context {
                 .device_wait_idle()
                 .unwrap();
 
-            // Destroy the fence.
-            self.device
-                .destroy_fence(self.fence_frame_done, None);
-
-            // Destroy the semaphores.
-            self.device
-                .destroy_semaphore(self.semaphore_image_ready, None);
-            self.device
-                .destroy_semaphore(self.semaphore_render_done, None);
+            // Destroy the per-frame data.
+            self.per_frame_data
+                .iter_mut()
+                .for_each(|data| data.destroy(&self.device));
 
             // Destroy the pipeline.
             self.pipeline.destroy(&self.device);

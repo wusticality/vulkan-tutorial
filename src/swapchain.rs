@@ -34,11 +34,17 @@ impl Swapchain {
         window: Arc<Window>,
         instance: &Instance,
         device: &Device,
-        surface: &Surface
+        surface: &Surface,
+        frames_in_flight: u32
     ) -> Result<Self> {
         let functions = ash::khr::swapchain::Device::new(&instance, &device);
-        let (swapchain, images, views, format, extent) =
-            Self::make(window.clone(), device, surface, &functions)?;
+        let (swapchain, images, views, format, extent) = Self::make(
+            window.clone(),
+            device,
+            surface,
+            &functions,
+            frames_in_flight
+        )?;
 
         Ok(Self {
             window,
@@ -90,7 +96,8 @@ impl Swapchain {
         window: Arc<Window>,
         device: &Device,
         surface: &Surface,
-        functions: &ash::khr::swapchain::Device
+        functions: &ash::khr::swapchain::Device,
+        frames_in_flight: u32
     ) -> Result<(
         vk::SwapchainKHR,
         Vec<vk::Image>,
@@ -114,7 +121,7 @@ impl Swapchain {
         ];
 
         // TODO: Select the first one in the list if
-        // none of our preferences are available.
+        //  none of our preferences are available.
 
         // One of our formats must be supported.
         let format = preferred_formats
@@ -126,7 +133,7 @@ impl Swapchain {
         let available_present_modes = surface.present_modes(&device.physical_device())?;
 
         // Our preferred present modes.
-        let preferred_present_modes = [vk::PresentModeKHR::MAILBOX, vk::PresentModeKHR::FIFO];
+        let preferred_present_modes = [vk::PresentModeKHR::FIFO, vk::PresentModeKHR::IMMEDIATE];
 
         // On of our present modes must be supported.
         let present_mode = preferred_present_modes
@@ -140,13 +147,10 @@ impl Swapchain {
         // Compute our extent.
         let extent = Self::compute_extent(window.clone(), &capabilities)?;
 
-        // Compute our image count.
-        let image_count = Self::compute_image_count(&capabilities);
-
         // Create the swapchain info.
         let swapchain_info = vk::SwapchainCreateInfoKHR::default()
             .surface(**surface)
-            .min_image_count(image_count)
+            .min_image_count(frames_in_flight)
             .image_format(format.format)
             .image_color_space(format.color_space)
             .image_extent(extent)
@@ -240,20 +244,6 @@ impl Swapchain {
 
             _ => capabilities.current_extent
         })
-    }
-
-    /// Compute the number of images in the swapchain.
-    fn compute_image_count(capabilities: &vk::SurfaceCapabilitiesKHR) -> u32 {
-        // The number of images in the swapchain.
-        let mut image_count = capabilities.min_image_count + 1;
-
-        // If the max image count is greater than zero and the image count
-        // is greater than the max image count, then clamp the image count.
-        if capabilities.max_image_count > 0 && image_count > capabilities.max_image_count {
-            image_count = capabilities.max_image_count;
-        }
-
-        image_count
     }
 
     /// Destroy the swapchain.
