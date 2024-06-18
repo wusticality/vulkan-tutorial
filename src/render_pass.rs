@@ -1,18 +1,10 @@
-use std::ops::Deref;
-
+use crate::{Device, FrameBuffers, Swapchain};
 use anyhow::Result;
 use ash::vk;
-
-use crate::{Device, Swapchain};
+use std::ops::Deref;
 
 /// Wraps a Vulkan render pass.
-pub struct RenderPass {
-    /// The render pass.
-    render_pass: vk::RenderPass,
-
-    /// The frame buffers.
-    frame_buffers: Vec<vk::Framebuffer>
-}
+pub struct RenderPass(vk::RenderPass);
 
 impl RenderPass {
     /// Create a new render pass.
@@ -52,34 +44,7 @@ impl RenderPass {
             None
         )?;
 
-        // The swapchain extent.
-        let extent = swapchain.extent();
-
-        // Create the frame buffers.
-        let frame_buffers = swapchain
-            .views()
-            .iter()
-            .map(|view| {
-                // The framebuffer attachments.
-                let attachments = [*view];
-
-                // Create the frame buffer create info.
-                let framebuffer_create_info = vk::FramebufferCreateInfo::default()
-                    .render_pass(render_pass)
-                    .attachments(&attachments)
-                    .width(extent.width)
-                    .height(extent.height)
-                    .layers(1);
-
-                // Create the frame buffer.
-                device.create_framebuffer(&framebuffer_create_info, None)
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-
-        Ok(Self {
-            render_pass,
-            frame_buffers
-        })
+        Ok(Self(render_pass))
     }
 
     /// Begin the render pass.
@@ -87,6 +52,7 @@ impl RenderPass {
         &self,
         device: &Device,
         swapchain: &Swapchain,
+        frame_buffers: &FrameBuffers,
         command_buffer: &vk::CommandBuffer,
         present_index: u32
     ) {
@@ -95,8 +61,8 @@ impl RenderPass {
 
         // Create the begin info.
         let begin_info = vk::RenderPassBeginInfo::default()
-            .render_pass(self.render_pass)
-            .framebuffer(self.frame_buffers[present_index as usize])
+            .render_pass(self.0)
+            .framebuffer(frame_buffers[present_index as usize])
             .render_area(extent.into())
             .clear_values(&[vk::ClearValue {
                 color: vk::ClearColorValue {
@@ -116,13 +82,7 @@ impl RenderPass {
 
     /// Destroy the render pass.
     pub(crate) unsafe fn destroy(&mut self, device: &Device) {
-        // Destroy the frame buffers.
-        for frame_buffer in &self.frame_buffers {
-            device.destroy_framebuffer(*frame_buffer, None);
-        }
-
-        // Destroy the render pass.
-        device.destroy_render_pass(self.render_pass, None);
+        device.destroy_render_pass(self.0, None);
     }
 }
 
@@ -130,6 +90,6 @@ impl Deref for RenderPass {
     type Target = vk::RenderPass;
 
     fn deref(&self) -> &Self::Target {
-        &self.render_pass
+        &self.0
     }
 }

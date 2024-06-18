@@ -1,14 +1,10 @@
 use crate::{Device, Instance, Surface};
 use anyhow::{anyhow, Result};
 use ash::vk::{self};
-use std::sync::Arc;
-use winit::window::Window;
+use winit::dpi::PhysicalSize;
 
 /// Wraps a Vulkan swapchain.
 pub struct Swapchain {
-    /// A handle to the window.
-    window: Arc<Window>,
-
     /// The swapchain functions.
     functions: ash::khr::swapchain::Device,
 
@@ -31,23 +27,17 @@ pub struct Swapchain {
 impl Swapchain {
     /// Create a new swapchain.
     pub unsafe fn new(
-        window: Arc<Window>,
+        size: &PhysicalSize<u32>,
         instance: &Instance,
         device: &Device,
         surface: &Surface,
         frames_in_flight: u32
     ) -> Result<Self> {
         let functions = ash::khr::swapchain::Device::new(&instance, &device);
-        let (swapchain, images, views, format, extent) = Self::make(
-            window.clone(),
-            device,
-            surface,
-            &functions,
-            frames_in_flight
-        )?;
+        let (swapchain, images, views, format, extent) =
+            Self::make(device, surface, &functions, size, frames_in_flight)?;
 
         Ok(Self {
-            window,
             functions,
             swapchain,
             images,
@@ -57,46 +47,50 @@ impl Swapchain {
         })
     }
 
-    /// Acquire the next image in the swapchain.
-    /// Returns the index of the acquired image.
-    pub unsafe fn acquire(&self, semaphore: &vk::Semaphore) -> Result<u32> {
-        // TODO: Handle the suboptimal case!
-
-        let (index, _suboptimal) = self.functions.acquire_next_image(
+    /// Acquire the next image in the swapchain. Returns the index of the acquired image.
+    /// If the returned index is None, it means we need to recreate the swapchain first.
+    pub unsafe fn acquire(&self, semaphore: &vk::Semaphore) -> Result<Option<u32>> {
+        match self.functions.acquire_next_image(
             self.swapchain,
             std::u64::MAX,
             *semaphore,
             vk::Fence::null()
-        )?;
-
-        Ok(index)
+        ) {
+            Ok((index, suboptimal)) => match suboptimal {
+                true => Ok(None),
+                false => Ok(Some(index))
+            },
+            Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => Ok(None),
+            Err(e) => Err(e.into())
+        }
     }
 
-    /// Present the current image.
+    /// Present the current image. Returns true if the swapchain should be recreated.
     pub unsafe fn present(
         &self,
         device: &Device,
         semaphore: &vk::Semaphore,
         present_index: u32
-    ) -> Result<()> {
-        // Present the image.
-        self.functions.queue_present(
+    ) -> Result<bool> {
+        match self.functions.queue_present(
             *device.queue(),
             &vk::PresentInfoKHR::default()
                 .wait_semaphores(&[*semaphore])
                 .swapchains(&[self.swapchain])
                 .image_indices(&[present_index])
-        )?;
-
-        Ok(())
+        ) {
+            Ok(suboptimal) => Ok(suboptimal),
+            Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => Ok(true),
+            Err(e) => Err(e.into())
+        }
     }
 
     /// Create a new swapchain.
     unsafe fn make(
-        window: Arc<Window>,
         device: &Device,
         surface: &Surface,
         functions: &ash::khr::swapchain::Device,
+        size: &PhysicalSize<u32>,
         frames_in_flight: u32
     ) -> Result<(
         vk::SwapchainKHR,
@@ -145,7 +139,7 @@ impl Swapchain {
         let capabilities = surface.capabilities(&device.physical_device())?;
 
         // Compute our extent.
-        let extent = Self::compute_extent(window.clone(), &capabilities)?;
+        let extent = Self::compute_extent(size, &capabilities)?;
 
         // Create the swapchain info.
         let swapchain_info = vk::SwapchainCreateInfoKHR::default()
@@ -217,7 +211,7 @@ impl Swapchain {
 
     /// Compute the extent of the swapchain.
     unsafe fn compute_extent(
-        window: Arc<Window>,
+        size: &PhysicalSize<u32>,
         capabilities: &vk::SurfaceCapabilitiesKHR
     ) -> Result<vk::Extent2D> {
         // If the current extent is set to the int max for both width and height,
@@ -227,19 +221,15 @@ impl Swapchain {
             vk::Extent2D {
                 width: u32::MAX,
                 height: u32::MAX
-            } => {
-                let requested = window.inner_size();
-
-                vk::Extent2D {
-                    width:  requested.width.clamp(
-                        capabilities.min_image_extent.width,
-                        capabilities.max_image_extent.width
-                    ),
-                    height: requested.height.clamp(
-                        capabilities.min_image_extent.height,
-                        capabilities.max_image_extent.height
-                    )
-                }
+            } => vk::Extent2D {
+                width:  size.width.clamp(
+                    capabilities.min_image_extent.width,
+                    capabilities.max_image_extent.width
+                ),
+                height: size.height.clamp(
+                    capabilities.min_image_extent.height,
+                    capabilities.max_image_extent.height
+                )
             },
 
             _ => capabilities.current_extent

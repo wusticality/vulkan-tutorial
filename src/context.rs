@@ -1,12 +1,12 @@
 use crate::{
-    command_pool::CommandPool, Debugging, Device, Instance, Pipeline, PipelineSettings, RenderPass,
-    Surface, Swapchain
+    command_pool::CommandPool, Debugging, Device, FrameBuffers, Instance, Pipeline,
+    PipelineSettings, RenderPass, Surface, Swapchain
 };
 use anyhow::{anyhow, Result};
 use ash::{vk, Entry};
 use std::{cmp::max, env::current_exe, ffi::CStr, fs::canonicalize, path::PathBuf, sync::Arc};
-use tracing::info;
-use winit::window::Window;
+use tracing::{info, warn};
+use winit::{dpi::PhysicalSize, window::Window};
 
 /// The maximum number of frames in flight.
 const FRAMES_IN_FLIGHT: u32 = 2;
@@ -93,6 +93,9 @@ pub struct Context {
     /// The render pass wrapper.
     render_pass: RenderPass,
 
+    /// The frame buffers wrapper.
+    frame_buffers: FrameBuffers,
+
     /// The pipeline wrapper.
     pipeline: Pipeline,
 
@@ -134,7 +137,7 @@ impl Context {
 
         // Create the swapchain wrapper.
         let swapchain = Swapchain::new(
-            window.clone(),
+            &window.inner_size(),
             &instance,
             &device,
             &surface,
@@ -143,6 +146,9 @@ impl Context {
 
         // Create the render pass wrapper.
         let render_pass = RenderPass::new(&device, &swapchain)?;
+
+        // Create the frame buffers wrapper.
+        let frame_buffers = FrameBuffers::new(&device, &swapchain, &render_pass)?;
 
         // The path to our assets.
         let assets_path = assets_path()?;
@@ -172,6 +178,7 @@ impl Context {
             command_pool,
             swapchain,
             render_pass,
+            frame_buffers,
             pipeline,
             per_frame_data,
             per_frame_index: 0
@@ -198,9 +205,18 @@ impl Context {
             .reset_fences(&[fence_frame_done])?;
 
         // Acquire the next swapchain image.
-        let present_index = self
-            .swapchain
-            .acquire(&semaphore_image_ready)?;
+        let present_index = loop {
+            match self
+                .swapchain
+                .acquire(&semaphore_image_ready)?
+            {
+                Some(present_index) => break present_index,
+                None => {
+                    warn!("acquire window size: {:?}", self.window.inner_size());
+                    self.recreate_swapchain(None)?;
+                }
+            }
+        };
 
         // Reset the command buffer.
         self.device
@@ -217,6 +233,7 @@ impl Context {
         self.render_pass.begin(
             &self.device,
             &self.swapchain,
+            &self.frame_buffers,
             &command_buffer,
             present_index
         );
@@ -245,11 +262,61 @@ impl Context {
             .queue_submit(*self.device.queue(), &[submit_info], fence_frame_done)?;
 
         // Present the image.
-        self.swapchain
-            .present(&self.device, &semaphore_render_done, present_index)?;
+        match self
+            .swapchain
+            .present(&self.device, &semaphore_render_done, present_index)?
+        {
+            true => {
+                warn!("present window size: {:?}", self.window.inner_size());
+                self.recreate_swapchain(None)?;
+            },
+            _ => {}
+        };
 
         // Advance the per-frame index.
         self.per_frame_index = (self.per_frame_index + 1) % self.frames_in_flight as usize;
+
+        Ok(())
+    }
+
+    /// Call when a resize occurs.
+    pub unsafe fn resize(&mut self, size: &PhysicalSize<u32>) -> Result<()> {
+        // Recreate the swapchain.
+        self.recreate_swapchain(Some(size))?;
+
+        Ok(())
+    }
+
+    /// Recreate the swapchain.
+    unsafe fn recreate_swapchain(&mut self, size: Option<&PhysicalSize<u32>>) -> Result<()> {
+        // Wait for the device to finish. We must do this or
+        // we may be in the middle of rendering on the GPU.
+        self.device.device_wait_idle()?;
+
+        // Compute the new size.
+        let size = match size {
+            Some(size) => *size,
+            None => self.window.inner_size()
+        };
+
+        // Destroy the frame buffers.
+        self.frame_buffers
+            .destroy(&self.device);
+
+        // Destroy the swapchain.
+        self.swapchain.destroy(&self.device);
+
+        // Create the swapchain wrapper.
+        self.swapchain = Swapchain::new(
+            &size,
+            &self.instance,
+            &self.device,
+            &self.surface,
+            self.frames_in_flight
+        )?;
+
+        // Create the frame buffers wrapper.
+        self.frame_buffers = FrameBuffers::new(&self.device, &self.swapchain, &self.render_pass)?;
 
         Ok(())
     }
@@ -270,8 +337,6 @@ impl Drop for Context {
         unsafe {
             // Wait for the device to finish. We must do this or
             // we may be in the middle of rendering on the GPU.
-            // This ensures that the GPU is done before we start
-            // destroying all the various Vulkan resources.
             self.device
                 .device_wait_idle()
                 .unwrap();
@@ -283,6 +348,10 @@ impl Drop for Context {
 
             // Destroy the pipeline.
             self.pipeline.destroy(&self.device);
+
+            // Destroy the frame buffers.
+            self.frame_buffers
+                .destroy(&self.device);
 
             // Destroy the render pass.
             self.render_pass

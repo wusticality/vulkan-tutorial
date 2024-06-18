@@ -1,7 +1,9 @@
 use std::{ffi::CStr, sync::Arc, time::Instant};
 
 use anyhow::Result;
-use tracing::{debug, error, level_filters::LevelFilter, subscriber::set_global_default, Level};
+use tracing::{
+    debug, error, level_filters::LevelFilter, subscriber::set_global_default, warn, Level
+};
 use tracing_log::LogTracer;
 use tracing_subscriber::FmtSubscriber;
 use vulkan::Context;
@@ -53,9 +55,8 @@ impl App {
         }
 
         // Create the window attributes.
-        let attributes = Window::default_attributes()
-            .with_resizable(false)
-            .with_inner_size(PhysicalSize::new(2048, 1536));
+        let attributes =
+            Window::default_attributes().with_inner_size(PhysicalSize::new(2048, 1536));
 
         // Create the window.
         let window = event_loop.create_window(attributes)?;
@@ -138,6 +139,19 @@ impl ApplicationHandler for App {
                 // Request a redraw.
                 if let Some(window) = &mut self.window {
                     window.request_redraw();
+                }
+            },
+
+            WindowEvent::Resized(size) => {
+                warn!("resized: {:?}", size);
+
+                // A resize occurred.
+                if let Some(context) = &mut self.context {
+                    if let Err(e) = unsafe { context.resize(&size) } {
+                        error!("{}", e);
+
+                        event_loop.exit();
+                    }
                 }
             },
 
