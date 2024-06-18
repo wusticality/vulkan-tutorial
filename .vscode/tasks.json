@@ -3,9 +3,10 @@
     "tasks": [
         {
             "label": "build-debug",
-            "type": "cargo",
-            "command": "build",
+            "type": "shell",
+            "command": "cargo",
             "args": [
+                "build",
                 "--example",
                 "simple"
             ],
@@ -22,9 +23,10 @@
         },
         {
             "label": "build-release",
-            "type": "cargo",
-            "command": "build",
+            "type": "shell",
+            "command": "cargo",
             "args": [
+                "build",
                 "--example",
                 "simple",
                 "--release"
