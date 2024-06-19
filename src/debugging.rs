@@ -8,8 +8,8 @@ pub struct Debugging {
     /// The function pointers.
     functions: ash::ext::debug_utils::Instance,
 
-    /// The debug messenger.
-    debug_messenger: vk::DebugUtilsMessengerEXT
+    /// The messenger.
+    messenger: vk::DebugUtilsMessengerEXT
 }
 
 impl Debugging {
@@ -17,21 +17,20 @@ impl Debugging {
         // Load debug functions.
         let functions = ash::ext::debug_utils::Instance::new(entry, instance);
 
-        // Create the debug messenger info.
-        let messenger_create_info = Self::messenger_create_info();
+        // Create the messenger info.
+        let messenger_info = Self::messenger_info();
 
-        // Create the debug messenger.
-        let debug_messenger =
-            functions.create_debug_utils_messenger(&messenger_create_info, None)?;
+        // Create the messenger.
+        let messenger = functions.create_debug_utils_messenger(&messenger_info, None)?;
 
         Ok(Self {
             functions,
-            debug_messenger
+            messenger
         })
     }
 
     /// Create the debug messenger info.
-    pub fn messenger_create_info<'a>() -> vk::DebugUtilsMessengerCreateInfoEXT<'a> {
+    pub fn messenger_info<'a>() -> vk::DebugUtilsMessengerCreateInfoEXT<'a> {
         vk::DebugUtilsMessengerCreateInfoEXT::default()
             .message_severity(
                 vk::DebugUtilsMessageSeverityFlagsEXT::ERROR
@@ -94,6 +93,6 @@ impl Debugging {
     /// Destroy the debug messenger.
     pub(crate) unsafe fn destroy(&mut self) {
         self.functions
-            .destroy_debug_utils_messenger(self.debug_messenger, None);
+            .destroy_debug_utils_messenger(self.messenger, None);
     }
 }
