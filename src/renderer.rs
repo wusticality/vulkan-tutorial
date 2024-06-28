@@ -64,8 +64,8 @@ impl PerFrameData {
     }
 }
 
-/// The Vulkan context.
-pub struct Context {
+/// The Vulkan renderer.
+pub struct Renderer {
     /// A handle to the window.
     window: Arc<Window>,
 
@@ -106,7 +106,7 @@ pub struct Context {
     per_frame_index: usize
 }
 
-impl Context {
+impl Renderer {
     /// Create a new Vulkan instance.
     pub unsafe fn new(window: Arc<Window>, name: &CStr) -> Result<Self> {
         // Load the Vulkan library.
@@ -332,7 +332,7 @@ impl Context {
     }
 }
 
-impl Drop for Context {
+impl Drop for Renderer {
     fn drop(&mut self) {
         unsafe {
             // Wait for the device to finish. We must do this or

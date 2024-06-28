@@ -107,12 +107,12 @@ impl Device {
                 .ok_or_else(|| anyhow!("No suitable physical device found!"))?;
 
         // Create one queue for graphics and presentation.
-        let queue_create_info = vk::DeviceQueueCreateInfo::default()
+        let queue_info = vk::DeviceQueueCreateInfo::default()
             .queue_family_index(*queue_family_index)
             .queue_priorities(&[1.0]);
 
         // Create our device features.
-        let physical_device_features = vk::PhysicalDeviceFeatures::default();
+        let enabled_features = vk::PhysicalDeviceFeatures::default();
 
         // We have to pass this as &[*const c_char].
         let required_extensions = required_extensions
@@ -123,8 +123,8 @@ impl Device {
         // Create the device info.
         let device_info = vk::DeviceCreateInfo::default()
             .enabled_extension_names(&required_extensions)
-            .queue_create_infos(std::slice::from_ref(&queue_create_info))
-            .enabled_features(&physical_device_features);
+            .queue_create_infos(std::slice::from_ref(&queue_info))
+            .enabled_features(&enabled_features);
 
         // Create the device.
         let device = instance.create_device(*physical_device, &device_info, None)?;

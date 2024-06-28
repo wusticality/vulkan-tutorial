@@ -6,7 +6,7 @@ use tracing::{
 };
 use tracing_log::LogTracer;
 use tracing_subscriber::FmtSubscriber;
-use vulkan::Context;
+use vulkan::Renderer;
 use winit::{
     application::ApplicationHandler,
     dpi::PhysicalSize,
@@ -24,8 +24,8 @@ struct App {
     /// The window.
     window: Option<Arc<Window>>,
 
-    /// The vulkan context.
-    context: Option<Context>,
+    /// The vulkan renderer.
+    renderer: Option<Renderer>,
 
     /// The fps timer.
     fps_timer: Instant,
@@ -39,7 +39,7 @@ impl Default for App {
         Self {
             initialized: false,
             window:      None,
-            context:     None,
+            renderer:    None,
             fps_timer:   Instant::now(),
             fps_count:   0
         }
@@ -65,12 +65,12 @@ impl App {
         // The application name.
         let name = CStr::from_bytes_with_nul(b"vulkan-tutorial\0")?;
 
-        // Create the vulkan context.
-        let context = unsafe { Context::new(window.clone(), &name)? };
+        // Create the vulkan renderer.
+        let renderer = unsafe { Renderer::new(window.clone(), &name)? };
 
         self.initialized = true;
         self.window = Some(window);
-        self.context = Some(context);
+        self.renderer = Some(renderer);
         self.fps_timer = Instant::now();
 
         Ok(())
@@ -95,7 +95,7 @@ impl ApplicationHandler for App {
     }
 
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        // TODO: Teardown the vulkan context in suspended
+        // TODO: Teardown the vulkan renderer in suspended
         //  and recreate it here or you'll run into issues
         //  on mobile devices.
 
@@ -125,8 +125,8 @@ impl ApplicationHandler for App {
 
             WindowEvent::RedrawRequested => {
                 // Render the frame.
-                if let Some(context) = &mut self.context {
-                    if let Err(e) = unsafe { context.draw() } {
+                if let Some(renderer) = &mut self.renderer {
+                    if let Err(e) = unsafe { renderer.draw() } {
                         error!("{}", e);
 
                         event_loop.exit();
@@ -146,8 +146,8 @@ impl ApplicationHandler for App {
                 warn!("resized: {:?}", size);
 
                 // A resize occurred.
-                if let Some(context) = &mut self.context {
-                    if let Err(e) = unsafe { context.resize(&size) } {
+                if let Some(renderer) = &mut self.renderer {
+                    if let Err(e) = unsafe { renderer.resize(&size) } {
                         error!("{}", e);
 
                         event_loop.exit();

@@ -102,6 +102,8 @@ impl Swapchain {
         // Get the available surface formats.
         let available_formats = surface.formats(&device.physical_device())?;
 
+        // TODO: Add this to device selection!
+
         // Our preferred formats.
         let preferred_formats = [
             vk::SurfaceFormatKHR {
