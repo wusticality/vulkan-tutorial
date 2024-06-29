@@ -6,10 +6,10 @@ use std::{ffi::CStr, fs::read, ops::Deref, path::PathBuf};
 
 /// The vertex descriptions.
 pub struct VertexDescriptions {
-    /// The vertex input binding descriptions.
+    /// The binding descriptions.
     pub bindings: Vec<vk::VertexInputBindingDescription>,
 
-    /// The vertex input attribute descriptions.
+    /// The attribute descriptions.
     pub attributes: Vec<vk::VertexInputAttributeDescription>
 }
 
@@ -80,9 +80,9 @@ impl Pipeline {
 
         // Setup the vertex input state create info.
         let vertex_input_state_create_info = match &settings.vertex_descriptions {
-            Some(vertex_descriptions) => vk::PipelineVertexInputStateCreateInfo::default()
-                .vertex_binding_descriptions(&vertex_descriptions.bindings)
-                .vertex_attribute_descriptions(&vertex_descriptions.attributes),
+            Some(descriptions) => vk::PipelineVertexInputStateCreateInfo::default()
+                .vertex_binding_descriptions(&descriptions.bindings)
+                .vertex_attribute_descriptions(&descriptions.attributes),
             None => vk::PipelineVertexInputStateCreateInfo::default()
         };
 
