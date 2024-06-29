@@ -239,7 +239,7 @@ impl Swapchain {
     }
 
     /// Destroy the swapchain.
-    pub(crate) unsafe fn destroy(&mut self, device: &Device) {
+    pub unsafe fn destroy(&mut self, device: &Device) {
         // Destroy the image views.
         for view in &self.views {
             device.destroy_image_view(*view, None);

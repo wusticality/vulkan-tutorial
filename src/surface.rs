@@ -80,7 +80,7 @@ impl Surface {
     }
 
     /// Destroy the surface.
-    pub(crate) unsafe fn destroy(&mut self) {
+    pub unsafe fn destroy(&mut self) {
         self.functions
             .destroy_surface(self.surface, None);
     }

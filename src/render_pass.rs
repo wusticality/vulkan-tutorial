@@ -48,7 +48,7 @@ impl RenderPass {
     }
 
     /// Begin the render pass.
-    pub(crate) unsafe fn begin(
+    pub unsafe fn begin(
         &self,
         device: &Device,
         swapchain: &Swapchain,
@@ -75,13 +75,13 @@ impl RenderPass {
     }
 
     /// End the render pass.
-    pub(crate) unsafe fn end(&self, device: &Device, command_buffer: &vk::CommandBuffer) {
+    pub unsafe fn end(&self, device: &Device, command_buffer: &vk::CommandBuffer) {
         // End the render pass.
         device.cmd_end_render_pass(*command_buffer);
     }
 
     /// Destroy the render pass.
-    pub(crate) unsafe fn destroy(&mut self, device: &Device) {
+    pub unsafe fn destroy(&mut self, device: &Device) {
         device.destroy_render_pass(self.0, None);
     }
 }

@@ -81,7 +81,7 @@ impl Instance {
     }
 
     /// Destroy the instance.
-    pub(crate) unsafe fn destroy(&self) {
+    pub unsafe fn destroy(&self) {
         self.0.destroy_instance(None);
     }
 }

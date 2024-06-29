@@ -91,7 +91,7 @@ impl Debugging {
     }
 
     /// Destroy the debug messenger.
-    pub(crate) unsafe fn destroy(&mut self) {
+    pub unsafe fn destroy(&mut self) {
         self.functions
             .destroy_debug_utils_messenger(self.messenger, None);
     }

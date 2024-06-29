@@ -89,7 +89,7 @@ impl TriangleRenderer {
     }
 
     /// Draw the pipeline.
-    pub(crate) unsafe fn draw(&self, device: &Device, command_buffer: &vk::CommandBuffer) {
+    pub unsafe fn draw(&self, device: &Device, command_buffer: &vk::CommandBuffer) {
         // First, bind the pipeline.
         device.cmd_bind_pipeline(
             *command_buffer,
@@ -102,7 +102,7 @@ impl TriangleRenderer {
     }
 
     /// Destroy the renderer.
-    pub(crate) unsafe fn destroy(&mut self, device: &Device) {
+    pub unsafe fn destroy(&mut self, device: &Device) {
         self.pipeline.destroy(device);
     }
 }

@@ -242,7 +242,7 @@ impl Device {
     }
 
     /// Destroy the device.
-    pub(crate) unsafe fn destroy(&mut self) {
+    pub unsafe fn destroy(&mut self) {
         // Destroy the device.
         self.device.destroy_device(None);
     }

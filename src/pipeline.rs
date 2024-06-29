@@ -182,7 +182,7 @@ impl Pipeline {
     }
 
     /// Destroy the pipeline.
-    pub(crate) unsafe fn destroy(&mut self, device: &Device) {
+    pub unsafe fn destroy(&mut self, device: &Device) {
         // Destroy the pipeline.
         device.destroy_pipeline(self.pipeline, None);
 

@@ -34,7 +34,7 @@ impl CommandPool {
     }
 
     /// Destroy the command pool.
-    pub(crate) unsafe fn destroy(&mut self, device: &Device) {
+    pub unsafe fn destroy(&mut self, device: &Device) {
         device.destroy_command_pool(self.0, None);
     }
 }
