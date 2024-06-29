@@ -1,10 +1,10 @@
 use crate::{
-    command_pool::CommandPool, Debugging, Device, FrameBuffers, Instance, Pipeline,
-    PipelineSettings, RenderPass, Surface, Swapchain
+    command_pool::CommandPool, Debugging, Device, FrameBuffers, Instance, RenderPass, Surface,
+    Swapchain, TriangleRenderer
 };
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use ash::{vk, Entry};
-use std::{cmp::max, env::current_exe, ffi::CStr, fs::canonicalize, path::PathBuf, sync::Arc};
+use std::{cmp::max, path::PathBuf, sync::Arc};
 use tracing::{info, warn};
 use winit::{dpi::PhysicalSize, window::Window};
 
@@ -64,7 +64,7 @@ impl PerFrameData {
     }
 }
 
-/// The Vulkan renderer.
+/// The renderer.
 pub struct Renderer {
     /// A handle to the window.
     window: Arc<Window>,
@@ -96,8 +96,8 @@ pub struct Renderer {
     /// The frame buffers wrapper.
     frame_buffers: FrameBuffers,
 
-    /// The pipeline wrapper.
-    pipeline: Pipeline,
+    /// The triangle renderer.
+    triangle_renderer: TriangleRenderer,
 
     /// The per-frame data.
     per_frame_data: Vec<PerFrameData>,
@@ -108,12 +108,12 @@ pub struct Renderer {
 
 impl Renderer {
     /// Create a new Vulkan instance.
-    pub unsafe fn new(window: Arc<Window>, name: &CStr) -> Result<Self> {
+    pub unsafe fn new(window: Arc<Window>, assets_path: PathBuf) -> Result<Self> {
         // Load the Vulkan library.
         let entry = Entry::linked();
 
         // Create the instance wrapper.
-        let instance = Instance::new(window.clone(), &entry, name)?;
+        let instance = Instance::new(window.clone(), &entry)?;
 
         // Capture messages for everything else.
         let debugging = match cfg!(debug_assertions) {
@@ -150,18 +150,8 @@ impl Renderer {
         // Create the frame buffers wrapper.
         let frame_buffers = FrameBuffers::new(&device, &swapchain, &render_pass)?;
 
-        // The path to our assets.
-        let assets_path = assets_path()?;
-
-        // Create the pipeline wrapper.
-        let pipeline = Pipeline::new(
-            &device,
-            &render_pass,
-            &PipelineSettings {
-                vert_shader_path: assets_path.join("shaders/shader.vert.spv"),
-                frag_shader_path: assets_path.join("shaders/shader.frag.spv")
-            }
-        )?;
+        // Create the triangle renderer.
+        let triangle_renderer = TriangleRenderer::new(&assets_path, &device, &render_pass)?;
 
         // Create the per-frame data.
         let per_frame_data = (0..frames_in_flight)
@@ -179,7 +169,7 @@ impl Renderer {
             swapchain,
             render_pass,
             frame_buffers,
-            pipeline,
+            triangle_renderer,
             per_frame_data,
             per_frame_index: 0
         })
@@ -229,6 +219,27 @@ impl Renderer {
         self.device
             .begin_command_buffer(command_buffer, &begin_info)?;
 
+        // Get the swapchain extent.
+        let extent = self.swapchain.extent();
+
+        // Set the viewport state.
+        self.device.cmd_set_viewport(
+            command_buffer,
+            0,
+            &[vk::Viewport {
+                x:         0.0,
+                y:         0.0,
+                width:     extent.width as f32,
+                height:    extent.height as f32,
+                min_depth: 0.0,
+                max_depth: 1.0
+            }]
+        );
+
+        // Set the scissor state.
+        self.device
+            .cmd_set_scissor(command_buffer, 0, &[extent.into()]);
+
         // Begin the render pass.
         self.render_pass.begin(
             &self.device,
@@ -238,9 +249,9 @@ impl Renderer {
             present_index
         );
 
-        // Draw the pipeline.
-        self.pipeline
-            .draw(&self.device, &self.swapchain, &command_buffer);
+        // Render the triangle.
+        self.triangle_renderer
+            .draw(&self.device, &command_buffer);
 
         // End the render pass.
         self.render_pass
@@ -346,8 +357,9 @@ impl Drop for Renderer {
                 .iter_mut()
                 .for_each(|data| data.destroy(&self.device));
 
-            // Destroy the pipeline.
-            self.pipeline.destroy(&self.device);
+            // Destroy the triangle renderer.
+            self.triangle_renderer
+                .destroy(&self.device);
 
             // Destroy the frame buffers.
             self.frame_buffers
@@ -379,16 +391,4 @@ impl Drop for Renderer {
             self.instance.destroy();
         }
     }
-}
-
-// TODO: Don't hardcode this!
-fn assets_path() -> Result<PathBuf> {
-    let path = current_exe()?
-        .parent()
-        .map(PathBuf::from)
-        .ok_or_else(|| anyhow!("Could not get parent directory"))?;
-    let path = path.join("../../../assets");
-    let path = canonicalize(path)?;
-
-    Ok(path)
 }

@@ -1,16 +1,43 @@
-use crate::{Device, RenderPass, Swapchain};
+use crate::{Device, RenderPass};
 use anyhow::{anyhow, Result};
 use ash::vk;
 use bytemuck::cast_slice;
-use std::{ffi::CStr, fs::read, path::PathBuf};
+use std::{ffi::CStr, fs::read, ops::Deref, path::PathBuf};
+
+/// The vertex descriptions.
+pub struct VertexDescriptions {
+    /// The vertex input binding descriptions.
+    pub bindings: Vec<vk::VertexInputBindingDescription>,
+
+    /// The vertex input attribute descriptions.
+    pub attributes: Vec<vk::VertexInputAttributeDescription>
+}
 
 /// The pipeline settings.
 pub struct PipelineSettings {
+    /// What subpass to render to.
+    pub subpass: u32,
+
     /// The vert shader path.
     pub vert_shader_path: PathBuf,
 
     /// The frag shader path.
-    pub frag_shader_path: PathBuf
+    pub frag_shader_path: PathBuf,
+
+    /// The vertex descriptions.
+    pub vertex_descriptions: Option<VertexDescriptions>,
+
+    /// The topology.
+    pub topology: vk::PrimitiveTopology,
+
+    /// The polygon mode.
+    pub polygon_mode: vk::PolygonMode,
+
+    /// The cull mode.
+    pub cull_mode: vk::CullModeFlags,
+
+    /// The front face.
+    pub front_face: vk::FrontFace
 }
 
 /// Wraps a Vulkan pipeline.
@@ -52,11 +79,16 @@ impl Pipeline {
             .dynamic_states(&[vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR]);
 
         // Setup the vertex input state create info.
-        let vertex_input_state_create_info = vk::PipelineVertexInputStateCreateInfo::default();
+        let vertex_input_state_create_info = match &settings.vertex_descriptions {
+            Some(vertex_descriptions) => vk::PipelineVertexInputStateCreateInfo::default()
+                .vertex_binding_descriptions(&vertex_descriptions.bindings)
+                .vertex_attribute_descriptions(&vertex_descriptions.attributes),
+            None => vk::PipelineVertexInputStateCreateInfo::default()
+        };
 
         // Setup the input assembly state create info.
-        let input_assembly_state_create_info = vk::PipelineInputAssemblyStateCreateInfo::default()
-            .topology(vk::PrimitiveTopology::TRIANGLE_LIST);
+        let input_assembly_state_create_info =
+            vk::PipelineInputAssemblyStateCreateInfo::default().topology(settings.topology);
 
         // The pipeline viewport state create info.
         let viewport_state_create_info = vk::PipelineViewportStateCreateInfo::default()
@@ -67,10 +99,10 @@ impl Pipeline {
         let rasterization_state_create_info = vk::PipelineRasterizationStateCreateInfo::default()
             .depth_clamp_enable(false)
             .rasterizer_discard_enable(false)
-            .polygon_mode(vk::PolygonMode::FILL)
+            .polygon_mode(settings.polygon_mode)
             .line_width(1.0)
-            .cull_mode(vk::CullModeFlags::BACK)
-            .front_face(vk::FrontFace::CLOCKWISE)
+            .cull_mode(settings.cull_mode)
+            .front_face(settings.front_face)
             .depth_bias_enable(false);
 
         // The multisample state create info.
@@ -105,7 +137,7 @@ impl Pipeline {
             .dynamic_state(&dynamic_state_create_info)
             .layout(pipeline_layout)
             .render_pass(**render_pass)
-            .subpass(0);
+            .subpass(settings.subpass);
 
         // Create the pipeline.
         let pipeline = match device.create_graphics_pipelines(
@@ -125,44 +157,6 @@ impl Pipeline {
             pipeline_layout,
             pipeline
         })
-    }
-
-    /// Draw the pipeline.
-    pub(crate) unsafe fn draw(
-        &self,
-        device: &Device,
-        swapchain: &Swapchain,
-        command_buffer: &vk::CommandBuffer
-    ) {
-        // First, bind the pipeline.
-        device.cmd_bind_pipeline(
-            *command_buffer,
-            vk::PipelineBindPoint::GRAPHICS,
-            self.pipeline
-        );
-
-        // Get the swapchain extent.
-        let extent = swapchain.extent();
-
-        // Set the viewport state.
-        device.cmd_set_viewport(
-            *command_buffer,
-            0,
-            &[vk::Viewport {
-                x:         0.0,
-                y:         0.0,
-                width:     extent.width as f32,
-                height:    extent.height as f32,
-                min_depth: 0.0,
-                max_depth: 1.0
-            }]
-        );
-
-        // Set the scissor state.
-        device.cmd_set_scissor(*command_buffer, 0, &[extent.into()]);
-
-        // Issue the draw command.
-        device.cmd_draw(*command_buffer, 3, 1, 0, 0);
     }
 
     /// Load a shader.
@@ -194,5 +188,13 @@ impl Pipeline {
 
         // Destroy the pipeline layout.
         device.destroy_pipeline_layout(self.pipeline_layout, None);
+    }
+}
+
+impl Deref for Pipeline {
+    type Target = vk::Pipeline;
+
+    fn deref(&self) -> &Self::Target {
+        &self.pipeline
     }
 }

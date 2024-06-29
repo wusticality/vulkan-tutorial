@@ -1,6 +1,5 @@
-use std::{ffi::CStr, sync::Arc, time::Instant};
-
-use anyhow::Result;
+use anyhow::{anyhow, Result};
+use std::{env::current_exe, fs::canonicalize, path::PathBuf, sync::Arc, time::Instant};
 use tracing::{
     debug, error, level_filters::LevelFilter, subscriber::set_global_default, warn, Level
 };
@@ -62,11 +61,11 @@ impl App {
         let window = event_loop.create_window(attributes)?;
         let window = Arc::new(window);
 
-        // The application name.
-        let name = CStr::from_bytes_with_nul(b"vulkan-tutorial\0")?;
+        // Get the assets path.
+        let assets_path = Self::assets_path()?;
 
         // Create the vulkan renderer.
-        let renderer = unsafe { Renderer::new(window.clone(), &name)? };
+        let renderer = unsafe { Renderer::new(window.clone(), assets_path)? };
 
         self.initialized = true;
         self.window = Some(window);
@@ -74,6 +73,20 @@ impl App {
         self.fps_timer = Instant::now();
 
         Ok(())
+    }
+
+    // TODO: This sucks, make it better!
+
+    /// Get the path to the assets directory.
+    fn assets_path() -> Result<PathBuf> {
+        let path = current_exe()?
+            .parent()
+            .map(PathBuf::from)
+            .ok_or_else(|| anyhow!("Could not get parent directory"))?;
+        let path = path.join("../../../assets");
+        let path = canonicalize(path)?;
+
+        Ok(path)
     }
 }
 

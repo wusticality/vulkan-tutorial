@@ -8,6 +8,7 @@ mod render_pass;
 mod renderer;
 mod surface;
 mod swapchain;
+mod triangle_renderer;
 
 pub use command_pool::*;
 pub use debugging::*;
@@ -19,3 +20,4 @@ pub use render_pass::*;
 pub use renderer::*;
 pub use surface::*;
 pub use swapchain::*;
+pub use triangle_renderer::*;
