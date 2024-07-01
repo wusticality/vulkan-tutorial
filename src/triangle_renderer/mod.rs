@@ -43,20 +43,27 @@ impl Vertex {
 }
 
 /// The vertices of our triangle.
-const VERTICES: [Vertex; 3] = [
+const VERTICES: [Vertex; 4] = [
     Vertex {
-        position: glam::Vec2::new(0.0, -0.5),
+        position: glam::Vec2::new(-0.5, -0.5),
         color:    glam::Vec3::new(1.0, 0.0, 0.0)
     },
     Vertex {
-        position: glam::Vec2::new(0.5, 0.5),
+        position: glam::Vec2::new(0.5, -0.5),
         color:    glam::Vec3::new(0.0, 1.0, 0.0)
     },
     Vertex {
-        position: glam::Vec2::new(-0.5, 0.5),
+        position: glam::Vec2::new(0.5, 0.5),
         color:    glam::Vec3::new(0.0, 0.0, 1.0)
+    },
+    Vertex {
+        position: glam::Vec2::new(-0.5, 0.5),
+        color:    glam::Vec3::new(1.0, 1.0, 1.0)
     }
 ];
+
+/// The indices of our triangle.
+const INDICES: [u16; 6] = [0, 1, 2, 2, 3, 0];
 
 /// The triangle renderer.
 pub struct TriangleRenderer {
@@ -64,7 +71,10 @@ pub struct TriangleRenderer {
     pipeline: Pipeline,
 
     /// The vertex buffer.
-    vertices: Buffer
+    vertices: Buffer,
+
+    /// The index buffer.
+    indices: Buffer
 }
 
 impl TriangleRenderer {
@@ -102,7 +112,14 @@ impl TriangleRenderer {
         // Create the vertex buffer.
         let vertices = Buffer::new(device, vk::BufferUsageFlags::VERTEX_BUFFER, &VERTICES)?;
 
-        Ok(Self { pipeline, vertices })
+        // Create the index buffer.
+        let indices = Buffer::new(device, vk::BufferUsageFlags::INDEX_BUFFER, &INDICES)?;
+
+        Ok(Self {
+            pipeline,
+            vertices,
+            indices
+        })
     }
 
     /// Draw the pipeline.
@@ -117,12 +134,18 @@ impl TriangleRenderer {
         // Bind the vertex buffer.
         device.cmd_bind_vertex_buffers(*command_buffer, 0, &[*self.vertices], &[0]);
 
+        // Bind the index buffer.
+        device.cmd_bind_index_buffer(*command_buffer, *self.indices, 0, vk::IndexType::UINT16);
+
         // Issue the draw command.
-        device.cmd_draw(*command_buffer, 3, 1, 0, 0);
+        device.cmd_draw_indexed(*command_buffer, INDICES.len() as u32, 1, 0, 0, 0);
     }
 
     /// Destroy the renderer.
     pub unsafe fn destroy(&mut self, device: &Device) {
+        // Destroy the index buffer.
+        self.indices.destroy(device);
+
         // Destroy the vertex buffer.
         self.vertices.destroy(device);
 
