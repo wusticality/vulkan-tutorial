@@ -1,3 +1,4 @@
+mod buffer;
 mod command_pool;
 mod debugging;
 mod device;
@@ -10,6 +11,7 @@ mod surface;
 mod swapchain;
 mod triangle_renderer;
 
+pub use buffer::*;
 pub use command_pool::*;
 pub use debugging::*;
 pub use device::*;

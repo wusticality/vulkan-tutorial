@@ -11,9 +11,6 @@ pub struct Swapchain {
     /// The swapchain.
     swapchain: vk::SwapchainKHR,
 
-    // The swapchain images.
-    images: Vec<vk::Image>,
-
     // The swapchain image views.
     views: Vec<vk::ImageView>,
 
@@ -34,13 +31,12 @@ impl Swapchain {
         frames_in_flight: u32
     ) -> Result<Self> {
         let functions = ash::khr::swapchain::Device::new(&instance, &device);
-        let (swapchain, images, views, format, extent) =
+        let (swapchain, views, format, extent) =
             Self::make(device, surface, &functions, size, frames_in_flight)?;
 
         Ok(Self {
             functions,
             swapchain,
-            images,
             views,
             format,
             extent
@@ -94,7 +90,6 @@ impl Swapchain {
         frames_in_flight: u32
     ) -> Result<(
         vk::SwapchainKHR,
-        Vec<vk::Image>,
         Vec<vk::ImageView>,
         vk::SurfaceFormatKHR,
         vk::Extent2D
@@ -193,7 +188,7 @@ impl Swapchain {
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        Ok((swapchain, images, views, format, extent))
+        Ok((swapchain, views, format, extent))
     }
 
     /// The image views.

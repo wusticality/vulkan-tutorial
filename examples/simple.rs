@@ -1,8 +1,6 @@
 use anyhow::{anyhow, Result};
 use std::{env::current_exe, fs::canonicalize, path::PathBuf, sync::Arc, time::Instant};
-use tracing::{
-    debug, error, level_filters::LevelFilter, subscriber::set_global_default, warn, Level
-};
+use tracing::{debug, error, level_filters::LevelFilter, subscriber::set_global_default, Level};
 use tracing_log::LogTracer;
 use tracing_subscriber::FmtSubscriber;
 use vulkan::Renderer;
@@ -156,7 +154,7 @@ impl ApplicationHandler for App {
             },
 
             WindowEvent::Resized(size) => {
-                warn!("resized: {:?}", size);
+                debug!("resized: {:?}", size);
 
                 // A resize occurred.
                 if let Some(renderer) = &mut self.renderer {

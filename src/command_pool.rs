@@ -1,19 +1,20 @@
-use crate::Device;
 use anyhow::Result;
-use ash::vk;
+use ash::{vk, Device};
 use std::ops::Deref;
 
 /// Wraps a Vulkan command pool.
 pub struct CommandPool(vk::CommandPool);
 
 impl CommandPool {
-    pub unsafe fn new(device: &Device) -> Result<Self> {
-        let queue_family_index = device.queue_family_index();
-
+    pub unsafe fn new(
+        device: &Device,
+        queue_family_index: u32,
+        flags: vk::CommandPoolCreateFlags
+    ) -> Result<Self> {
         // Create the command pool create info.
         let command_pool_info = vk::CommandPoolCreateInfo::default()
             .queue_family_index(queue_family_index)
-            .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER);
+            .flags(flags);
 
         // Create the command pool.
         let command_pool = device.create_command_pool(&command_pool_info, None)?;
@@ -22,11 +23,18 @@ impl CommandPool {
     }
 
     /// Create a new command buffer.
-    pub unsafe fn new_command_buffer(&self, device: &Device) -> Result<vk::CommandBuffer> {
+    pub unsafe fn new_command_buffer(
+        &self,
+        device: &Device,
+        primary: bool
+    ) -> Result<vk::CommandBuffer> {
         // Create the command buffer create info.
         let command_buffer_info = vk::CommandBufferAllocateInfo::default()
             .command_pool(self.0)
-            .level(vk::CommandBufferLevel::PRIMARY)
+            .level(match primary {
+                true => vk::CommandBufferLevel::PRIMARY,
+                false => vk::CommandBufferLevel::SECONDARY
+            })
             .command_buffer_count(1);
 
         // Create the command buffer.

@@ -1,11 +1,10 @@
 use crate::{
-    command_pool::CommandPool, Debugging, Device, FrameBuffers, Instance, RenderPass, Surface,
-    Swapchain, TriangleRenderer
+    Debugging, Device, FrameBuffers, Instance, RenderPass, Surface, Swapchain, TriangleRenderer
 };
 use anyhow::Result;
 use ash::{vk, Entry};
-use std::{cmp::max, path::PathBuf, sync::Arc};
-use tracing::{info, warn};
+use std::{cmp::max, path::PathBuf, slice::from_ref, sync::Arc};
+use tracing::{debug, info};
 use winit::{dpi::PhysicalSize, window::Window};
 
 /// The maximum number of frames in flight.
@@ -27,9 +26,12 @@ struct PerFrameData {
 }
 
 impl PerFrameData {
-    pub unsafe fn new(device: &Device, command_pool: &CommandPool) -> Result<Self> {
+    pub unsafe fn new(device: &Device) -> Result<Self> {
+        // Get the command pool.
+        let command_pool = device.command_pool();
+
         // Create the command buffer.
-        let command_buffer = command_pool.new_command_buffer(&device)?;
+        let command_buffer = command_pool.new_command_buffer(&device, true)?;
 
         // Create the semaphores.
         let semaphore_image_ready = device.create_semaphore(&Default::default(), None)?;
@@ -84,9 +86,6 @@ pub struct Renderer {
     /// The number of frames in flight.
     frames_in_flight: u32,
 
-    /// The command pool.
-    command_pool: CommandPool,
-
     /// The swapchain wrapper.
     swapchain: Swapchain,
 
@@ -132,9 +131,6 @@ impl Renderer {
 
         info!("Frames in flight: {}", frames_in_flight);
 
-        // Create the command pool wrapper.
-        let command_pool = CommandPool::new(&device)?;
-
         // Create the swapchain wrapper.
         let swapchain = Swapchain::new(
             &window.inner_size(),
@@ -155,7 +151,7 @@ impl Renderer {
 
         // Create the per-frame data.
         let per_frame_data = (0..frames_in_flight)
-            .map(|_| PerFrameData::new(&device, &command_pool))
+            .map(|_| PerFrameData::new(&device))
             .collect::<Result<Vec<_>>>()?;
 
         Ok(Self {
@@ -165,7 +161,6 @@ impl Renderer {
             surface,
             device,
             frames_in_flight,
-            command_pool,
             swapchain,
             render_pass,
             frame_buffers,
@@ -202,7 +197,11 @@ impl Renderer {
             {
                 Some(present_index) => break present_index,
                 None => {
-                    warn!("acquire window size: {:?}", self.window.inner_size());
+                    debug!(
+                        "Acquire failed, recreating swapchain: {:?}",
+                        self.window.inner_size()
+                    );
+
                     self.recreate_swapchain(None)?;
                 }
             }
@@ -263,10 +262,10 @@ impl Renderer {
 
         // Create the submit info.
         let submit_info = vk::SubmitInfo::default()
-            .wait_semaphores(std::slice::from_ref(&semaphore_image_ready))
+            .wait_semaphores(from_ref(&semaphore_image_ready))
             .wait_dst_stage_mask(&[vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT])
-            .command_buffers(std::slice::from_ref(&command_buffer))
-            .signal_semaphores(std::slice::from_ref(&semaphore_render_done));
+            .command_buffers(from_ref(&command_buffer))
+            .signal_semaphores(from_ref(&semaphore_render_done));
 
         // Submit the command buffer.
         self.device
@@ -278,7 +277,11 @@ impl Renderer {
             .present(&self.device, &semaphore_render_done, present_index)?
         {
             true => {
-                warn!("present window size: {:?}", self.window.inner_size());
+                debug!(
+                    "Present failed, recreating swapchain: {:?}",
+                    self.window.inner_size()
+                );
+
                 self.recreate_swapchain(None)?;
             },
             _ => {}
@@ -371,10 +374,6 @@ impl Drop for Renderer {
 
             // Destroy the swapchain.
             self.swapchain.destroy(&self.device);
-
-            // Destroy the command pool.
-            self.command_pool
-                .destroy(&self.device);
 
             // Destroy the device.
             self.device.destroy();

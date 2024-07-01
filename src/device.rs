@@ -1,13 +1,16 @@
-use crate::{Instance, Surface};
+use crate::{CommandPool, Instance, Surface};
 use anyhow::{anyhow, Result};
-use ash::vk;
-use std::{ffi::CStr, ops::Deref};
+use ash::vk::{self};
+use std::{ffi::CStr, ops::Deref, slice::from_ref};
 use tracing::info;
 
 /// Wraps a Vulkan device.
 pub struct Device {
     /// The physical device.
     physical_device: vk::PhysicalDevice,
+
+    /// The memory properties.
+    memory_properties: vk::PhysicalDeviceMemoryProperties,
 
     /// The logical device.
     device: ash::Device,
@@ -16,7 +19,13 @@ pub struct Device {
     queue: vk::Queue,
 
     /// The queue family index.
-    queue_family_index: u32
+    queue_family_index: u32,
+
+    /// The regular command pool.
+    command_pool: CommandPool,
+
+    /// The transient command pool.
+    transient_command_pool: CommandPool
 }
 
 impl Device {
@@ -106,6 +115,9 @@ impl Device {
                 .first()
                 .ok_or_else(|| anyhow!("No suitable physical device found!"))?;
 
+        // Get the memory properties.
+        let memory_properties = instance.get_physical_device_memory_properties(*physical_device);
+
         // Create one queue for graphics and presentation.
         let queue_info = vk::DeviceQueueCreateInfo::default()
             .queue_family_index(*queue_family_index)
@@ -123,7 +135,7 @@ impl Device {
         // Create the device info.
         let device_info = vk::DeviceCreateInfo::default()
             .enabled_extension_names(&required_extensions)
-            .queue_create_infos(std::slice::from_ref(&queue_info))
+            .queue_create_infos(from_ref(&queue_info))
             .enabled_features(&enabled_features);
 
         // Create the device.
@@ -132,17 +144,39 @@ impl Device {
         // Get the queue.
         let queue = device.get_device_queue(*queue_family_index, 0);
 
+        // Create the command pool.
+        let command_pool = CommandPool::new(
+            &device,
+            *queue_family_index,
+            vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER
+        )?;
+
+        // Create the transient command pool.
+        let transient_command_pool = CommandPool::new(
+            &device,
+            *queue_family_index,
+            vk::CommandPoolCreateFlags::TRANSIENT
+        )?;
+
         Ok(Self {
             physical_device: *physical_device,
+            memory_properties,
             device,
             queue,
-            queue_family_index: *queue_family_index
+            queue_family_index: *queue_family_index,
+            command_pool,
+            transient_command_pool
         })
     }
 
     /// Returns the physical device.
     pub fn physical_device(&self) -> &vk::PhysicalDevice {
         &self.physical_device
+    }
+
+    /// Returns the memory properties.
+    pub fn memory_properties(&self) -> &vk::PhysicalDeviceMemoryProperties {
+        &self.memory_properties
     }
 
     /// Returns the queue.
@@ -153,6 +187,57 @@ impl Device {
     /// Returns the queue family index.
     pub fn queue_family_index(&self) -> u32 {
         self.queue_family_index
+    }
+
+    /// Returns the command pool.
+    pub fn command_pool(&self) -> &CommandPool {
+        &self.command_pool
+    }
+
+    /// Execute a one-time command.
+    pub unsafe fn one_time_command<F>(&self, f: F) -> Result<()>
+    where
+        F: FnOnce(vk::CommandBuffer) -> Result<()>
+    {
+        // Create the command buffer.
+        let command_buffer = self
+            .transient_command_pool
+            .new_command_buffer(self, true)?;
+
+        // Create the fence so we can wait for completion.
+        let fence = self.create_fence(&vk::FenceCreateInfo::default(), None)?;
+
+        // Create the begin info.
+        let begin_info = vk::CommandBufferBeginInfo::default()
+            .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
+
+        // Begin the command buffer.
+        self.begin_command_buffer(command_buffer, &begin_info)?;
+
+        // Do the actual work.
+        f(command_buffer)?;
+
+        // End the command buffer.
+        self.end_command_buffer(command_buffer)?;
+
+        // Create the submit info.
+        let submit_info = vk::SubmitInfo::default().command_buffers(from_ref(&command_buffer));
+
+        // Submit the command buffer.
+        self.device
+            .queue_submit(self.queue, &[submit_info], fence)?;
+
+        // Wait for the fence indefinitely.
+        self.device
+            .wait_for_fences(&[fence], true, std::u64::MAX)?;
+
+        // Destroy the fence.
+        self.destroy_fence(fence, None);
+
+        // Free the command buffer.
+        self.free_command_buffers(*self.transient_command_pool, from_ref(&command_buffer));
+
+        Ok(())
     }
 
     /// Checks if the device has the required extensions.
@@ -243,6 +328,14 @@ impl Device {
 
     /// Destroy the device.
     pub unsafe fn destroy(&mut self) {
+        // Destroy the transient command pool.
+        self.transient_command_pool
+            .destroy(&self.device);
+
+        // Destroy the command pool.
+        self.command_pool
+            .destroy(&self.device);
+
         // Destroy the device.
         self.device.destroy_device(None);
     }
