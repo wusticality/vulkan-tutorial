@@ -7,6 +7,9 @@
             "request": "launch",
             "program": "${workspaceFolder}/target/debug/examples/simple",
             "cwd": "${workspaceFolder}",
+            "initCommands": [
+                "break set -n rust_panic"
+            ],
             "preLaunchTask": "build-debug"
         },
         {
@@ -15,6 +18,9 @@
             "request": "launch",
             "program": "${workspaceFolder}/target/release/examples/simple",
             "cwd": "${workspaceFolder}",
+            "initCommands": [
+                "break set -n rust_panic"
+            ],
             "preLaunchTask": "build-release"
         },
     ]
