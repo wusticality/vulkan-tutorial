@@ -147,7 +147,8 @@ impl Renderer {
         let frame_buffers = FrameBuffers::new(&device, &swapchain, &render_pass)?;
 
         // Create the triangle renderer.
-        let triangle_renderer = TriangleRenderer::new(&assets_path, &device, &render_pass)?;
+        let triangle_renderer =
+            TriangleRenderer::new(&assets_path, &device, &render_pass, frames_in_flight)?;
 
         // Create the per-frame data.
         let per_frame_data = (0..frames_in_flight)
@@ -174,8 +175,6 @@ impl Renderer {
     pub unsafe fn draw(&mut self) -> Result<()> {
         // Get the per-frame data.
         let per_frame_data = &self.per_frame_data[self.per_frame_index];
-
-        // Get references to our synchronization objects.
         let command_buffer = per_frame_data.command_buffer;
         let semaphore_image_ready = per_frame_data.semaphore_image_ready;
         let semaphore_render_done = per_frame_data.semaphore_render_done;
@@ -249,8 +248,12 @@ impl Renderer {
         );
 
         // Render the triangle.
-        self.triangle_renderer
-            .draw(&self.device, &command_buffer);
+        self.triangle_renderer.draw(
+            &self.device,
+            &self.swapchain,
+            &command_buffer,
+            self.per_frame_index
+        )?;
 
         // End the render pass.
         self.render_pass

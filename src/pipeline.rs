@@ -37,7 +37,10 @@ pub struct PipelineSettings {
     pub cull_mode: vk::CullModeFlags,
 
     /// The front face.
-    pub front_face: vk::FrontFace
+    pub front_face: vk::FrontFace,
+
+    /// The descriptor set layouts.
+    pub descriptor_set_layouts: Option<Vec<vk::DescriptorSetLayout>>
 }
 
 /// Wraps a Vulkan pipeline.
@@ -120,7 +123,10 @@ impl Pipeline {
             .attachments(&color_blend_attachment_states);
 
         // The pipeline layout create info.
-        let pipeline_layout_create_info = vk::PipelineLayoutCreateInfo::default();
+        let pipeline_layout_create_info = match &settings.descriptor_set_layouts {
+            Some(set_layouts) => vk::PipelineLayoutCreateInfo::default().set_layouts(set_layouts),
+            None => vk::PipelineLayoutCreateInfo::default()
+        };
 
         // Create the pipeline layout.
         let pipeline_layout = device.create_pipeline_layout(&pipeline_layout_create_info, None)?;
@@ -157,6 +163,11 @@ impl Pipeline {
             pipeline_layout,
             pipeline
         })
+    }
+
+    /// The pipeline layout.
+    pub fn pipeline_layout(&self) -> &vk::PipelineLayout {
+        &self.pipeline_layout
     }
 
     /// Load a shader.

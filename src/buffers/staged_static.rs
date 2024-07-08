@@ -1,16 +1,20 @@
-use crate::Device;
-use anyhow::{anyhow, Result};
+use crate::{new_buffer, Device};
+use anyhow::Result;
 use ash::{
     util::Align,
     vk::{self}
 };
 use std::{
-    mem::{align_of, size_of},
+    mem::{align_of, size_of_val},
     ops::Deref
 };
 
-/// Wraps a Vulkan buffer.
-pub struct Buffer {
+/// Wraps a Vulkan buffer. This version uses a staging buffer to
+/// directly upload data to the GPU exactly once. No CPU-side
+/// buffer is kept around for copying. Use this for static data
+/// like meshes and textures that should be uploaded once and
+/// never change.
+pub struct StagedStaticBuffer {
     /// The buffer.
     buffer: vk::Buffer,
 
@@ -18,18 +22,17 @@ pub struct Buffer {
     memory: vk::DeviceMemory
 }
 
-impl Buffer {
+impl StagedStaticBuffer {
     pub unsafe fn new<T: Copy>(
         device: &Device,
         usage: vk::BufferUsageFlags,
         data: &[T]
     ) -> Result<Self> {
         // Compute the size of the buffer in bytes.
-        let size = size_of::<T>() * data.len();
-        let size = size as vk::DeviceSize;
+        let size = size_of_val(data) as vk::DeviceSize;
 
         // Create the src buffer.
-        let (src_buffer, src_memory, src_memory_size) = Self::new_buffer(
+        let (src_buffer, src_memory, src_memory_size) = new_buffer(
             device,
             size,
             vk::BufferUsageFlags::TRANSFER_SRC,
@@ -57,7 +60,7 @@ impl Buffer {
         }
 
         // Create the dst buffer.
-        let (dst_buffer, dst_memory, _dst_memory_size) = Self::new_buffer(
+        let (dst_buffer, dst_memory, _dst_memory_size) = new_buffer(
             device,
             size,
             usage | vk::BufferUsageFlags::TRANSFER_DST,
@@ -93,65 +96,6 @@ impl Buffer {
         })
     }
 
-    /// Create an internal buffer.
-    unsafe fn new_buffer(
-        device: &Device,
-        size: vk::DeviceSize,
-        usage: vk::BufferUsageFlags,
-        memory_properties: vk::MemoryPropertyFlags
-    ) -> Result<(vk::Buffer, vk::DeviceMemory, vk::DeviceSize)> {
-        // Create the buffer info.
-        let buffer_info = vk::BufferCreateInfo::default()
-            .size(size)
-            .usage(usage)
-            .sharing_mode(vk::SharingMode::EXCLUSIVE);
-
-        // Create the buffer.
-        let buffer = device.create_buffer(&buffer_info, None)?;
-
-        // Get the buffer's memory requirements.
-        let memory_requirements = device.get_buffer_memory_requirements(buffer);
-
-        // Find a suitable memory type.
-        let memory_index = Self::find_memory_type(device, &memory_requirements, memory_properties)?;
-
-        // Create the memory allocation info.
-        let memory_info = vk::MemoryAllocateInfo::default()
-            .allocation_size(memory_requirements.size)
-            .memory_type_index(memory_index);
-
-        // Allocate the memory.
-        let memory = device.allocate_memory(&memory_info, None)?;
-
-        // Bind the memory to the buffer.
-        device.bind_buffer_memory(buffer, memory, 0)?;
-
-        Ok((buffer, memory, memory_requirements.size))
-    }
-
-    /// Find a usable memory type.
-    unsafe fn find_memory_type(
-        device: &Device,
-        memory_requirements: &vk::MemoryRequirements,
-        properties: vk::MemoryPropertyFlags
-    ) -> Result<u32> {
-        // Get the memory properties.
-        let memory_properties = device.memory_properties();
-
-        // Find a memory type.
-        for i in 0..memory_properties.memory_type_count {
-            if memory_requirements.memory_type_bits & (1 << i) != 0
-                && memory_properties.memory_types[i as usize]
-                    .property_flags
-                    .contains(properties)
-            {
-                return Ok(i);
-            }
-        }
-
-        Err(anyhow!("Failed to find a suitable memory type!"))
-    }
-
     /// Destroy the buffer.
     pub unsafe fn destroy(&self, device: &Device) {
         // Destroy the buffer.
@@ -162,7 +106,7 @@ impl Buffer {
     }
 }
 
-impl Deref for Buffer {
+impl Deref for StagedStaticBuffer {
     type Target = vk::Buffer;
 
     fn deref(&self) -> &Self::Target {
