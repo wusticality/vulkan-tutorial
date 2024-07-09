@@ -13,7 +13,7 @@ use std::{
 /// Wraps a Vulkan buffer. This version does not use a staging buffer
 /// but instead directly maps host-visible coherent memory. Use this
 /// for things like uniform buffers that are small.
-pub struct HostBuffer<T> {
+pub struct MappedBuffer<T> {
     /// The buffer.
     buffer: vk::Buffer,
 
@@ -30,7 +30,7 @@ pub struct HostBuffer<T> {
     size: vk::DeviceSize
 }
 
-impl<T: Copy> HostBuffer<T> {
+impl<T: Copy> MappedBuffer<T> {
     pub unsafe fn new(device: &Device, usage: vk::BufferUsageFlags, data: &[T]) -> Result<Self> {
         // Compute the size of the buffer in bytes.
         let size = size_of_val(data) as vk::DeviceSize;
@@ -94,7 +94,7 @@ impl<T: Copy> HostBuffer<T> {
     }
 }
 
-impl<T> Deref for HostBuffer<T> {
+impl<T> Deref for MappedBuffer<T> {
     type Target = vk::Buffer;
 
     fn deref(&self) -> &Self::Target {

@@ -11,10 +11,9 @@ use std::{
 
 /// Wraps a Vulkan buffer. This version uses a staging buffer to
 /// directly upload data to the GPU exactly once. No CPU-side
-/// buffer is kept around for copying. Use this for static data
-/// like meshes and textures that should be uploaded once and
-/// never change.
-pub struct StagedStaticBuffer {
+/// buffer is kept around for copying. Use this for data like
+/// meshes that never change and should be uploaded once.
+pub struct ImmutableBuffer {
     /// The buffer.
     buffer: vk::Buffer,
 
@@ -22,7 +21,7 @@ pub struct StagedStaticBuffer {
     memory: vk::DeviceMemory
 }
 
-impl StagedStaticBuffer {
+impl ImmutableBuffer {
     pub unsafe fn new<T: Copy>(
         device: &Device,
         usage: vk::BufferUsageFlags,
@@ -106,7 +105,7 @@ impl StagedStaticBuffer {
     }
 }
 
-impl Deref for StagedStaticBuffer {
+impl Deref for ImmutableBuffer {
     type Target = vk::Buffer;
 
     fn deref(&self) -> &Self::Target {

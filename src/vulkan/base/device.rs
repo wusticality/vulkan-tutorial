@@ -9,6 +9,12 @@ pub struct Device {
     /// The physical device.
     physical_device: vk::PhysicalDevice,
 
+    /// The physical device properties.
+    properties: vk::PhysicalDeviceProperties,
+
+    /// The physical device features.
+    features: vk::PhysicalDeviceFeatures,
+
     /// The memory properties.
     memory_properties: vk::PhysicalDeviceMemoryProperties,
 
@@ -110,7 +116,7 @@ impl Device {
         candidates.sort_by(|a, b| b.0.cmp(&a.0));
 
         // Take the highest scoring candidate.
-        let (_score, physical_device, _properties, _features, queue_family_index, _queue) =
+        let (_score, physical_device, properties, features, queue_family_index, _queue) =
             candidates
                 .first()
                 .ok_or_else(|| anyhow!("No suitable physical device found!"))?;
@@ -124,7 +130,7 @@ impl Device {
             .queue_priorities(&[1.0]);
 
         // Create our device features.
-        let enabled_features = vk::PhysicalDeviceFeatures::default();
+        let enabled_features = vk::PhysicalDeviceFeatures::default().sampler_anisotropy(true);
 
         // We have to pass this as &[*const c_char].
         let required_extensions = required_extensions
@@ -160,6 +166,8 @@ impl Device {
 
         Ok(Self {
             physical_device: *physical_device,
+            properties: *properties,
+            features: *features,
             memory_properties,
             device,
             queue,
@@ -172,6 +180,16 @@ impl Device {
     /// Returns the physical device.
     pub fn physical_device(&self) -> &vk::PhysicalDevice {
         &self.physical_device
+    }
+
+    /// Returns the physical device properties.
+    pub fn properties(&self) -> &vk::PhysicalDeviceProperties {
+        &self.properties
+    }
+
+    /// Returns the physical device features.
+    pub fn features(&self) -> &vk::PhysicalDeviceFeatures {
+        &self.features
     }
 
     /// Returns the memory properties.
@@ -279,12 +297,17 @@ impl Device {
         required_extensions: &Vec<&CStr>,
         physical_device: &vk::PhysicalDevice,
         _properties: &vk::PhysicalDeviceProperties,
-        _features: &vk::PhysicalDeviceFeatures,
+        features: &vk::PhysicalDeviceFeatures,
         queue_family_index: u32,
         queue: &vk::QueueFamilyProperties
     ) -> Result<bool> {
         // A candidate must support our required extensions.
         if !Self::device_has_extensions(instance, physical_device, required_extensions) {
+            return Ok(false);
+        }
+
+        // We require ansitropic filtering.
+        if features.sampler_anisotropy == 0 {
             return Ok(false);
         }
 
