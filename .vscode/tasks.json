@@ -17,7 +17,11 @@
                 "kind": "build"
             },
             "presentation": {
-                "panel": "dedicated",
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
                 "clear": true
             }
         },
@@ -38,7 +42,11 @@
                 "kind": "build"
             },
             "presentation": {
-                "panel": "dedicated",
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
                 "clear": true
             }
         },
@@ -53,8 +61,12 @@
                 "kind": "build"
             },
             "presentation": {
-                "panel": "dedicated",
-                "clear": true,
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": true
             }
         }
     ]
